@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Load Log</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap');
+  * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
+  body { margin: 0; background: #121210; color: #ece8de; }
+  .display { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.5px; }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  select { -webkit-appearance: none; appearance: none; }
+  ::-webkit-scrollbar { display: none; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useCallback, useMemo } = React;
+
+const PLAN = [
+  { id: "d1", num: "01", label: "Chest / Triceps", exercises: [
+    { id: "c-bench", name: "Smith Machine Bench Press", target: "4 x 6-8" },
+    { id: "c-incline", name: "Incline DB Press", target: "3 x 8-10" },
+    { id: "c-fly", name: "Cable Fly", target: "3 x 10-12" },
+    { id: "c-cgp", name: "Smith Machine Close-Grip Press", target: "3 x 8-10" },
+    { id: "c-rope-push", name: "Rope Tricep Pushdown", target: "3 x 10-12" },
+    { id: "c-oh-tri", name: "Overhead Cable Tricep Extension", target: "2 x 12" },
+  ]},
+  { id: "d2", num: "02", label: "Back / Biceps", exercises: [
+    { id: "b-row", name: "Smith Machine Bent-Over Row", target: "4 x 6-8" },
+    { id: "b-latpull", name: "Lat Pulldown", target: "3 x 8-10" },
+    { id: "b-single-row", name: "Single-Arm Cable Row", target: "3 x 8-10 ea" },
+    { id: "b-facepull", name: "Face Pulls", target: "3 x 12-15" },
+    { id: "b-curl", name: "DB / Cable Curls", target: "3 x 8-10" },
+    { id: "b-hammer", name: "Hammer Curls", target: "2 x 10-12" },
+  ]},
+  { id: "d3", num: "03", label: "Shoulders", exercises: [
+    { id: "s-ohp", name: "Smith Machine Overhead Press", target: "4 x 6-8" },
+    { id: "s-lat-raise", name: "DB Lateral Raises", target: "3 x 12-15" },
+    { id: "s-cable-lat", name: "Cable Lateral Raises", target: "2 x 12-15" },
+    { id: "s-rear-delt", name: "Rear Delt Fly / Face Pull", target: "3 x 12-15" },
+    { id: "s-band-pullapart", name: "Band Pull-Aparts", target: "2 x 15-20" },
+  ]},
+  { id: "d4", num: "04", label: "Legs", exercises: [
+    { id: "l-squat", name: "Smith Machine Squats", target: "4 x 6-8" },
+    { id: "l-rdl", name: "Smith Machine RDLs", target: "3 x 8-10" },
+    { id: "l-lunge", name: "DB Walking Lunges", target: "3 x 10 ea" },
+    { id: "l-stepup", name: "DB Step-Ups", target: "2 x 10 ea" },
+    { id: "l-calf", name: "Standing Calf Raises", target: "4 x 12-15" },
+  ]},
+];
+
+const EQUIPMENT_DEFAULT = {
+  "c-bench":"smith", "c-incline":"dumbbell", "c-fly":"cable", "c-cgp":"smith", "c-rope-push":"cable", "c-oh-tri":"cable",
+  "b-row":"smith", "b-latpull":"cable", "b-single-row":"cable", "b-facepull":"cable", "b-curl":"dumbbell", "b-hammer":"dumbbell",
+  "s-ohp":"smith", "s-lat-raise":"dumbbell", "s-cable-lat":"cable", "s-rear-delt":"cable", "s-band-pullapart":"band",
+  "l-squat":"smith", "l-rdl":"smith", "l-lunge":"dumbbell", "l-stepup":"dumbbell", "l-calf":"dumbbell",
+};
+
+const MUSCLE_GROUP = {
+  "c-bench":"Chest", "c-incline":"Chest", "c-fly":"Chest",
+  "c-cgp":"Triceps", "c-rope-push":"Triceps", "c-oh-tri":"Triceps",
+  "b-row":"Back", "b-latpull":"Back", "b-single-row":"Back", "b-facepull":"Back",
+  "b-curl":"Biceps", "b-hammer":"Biceps",
+  "s-ohp":"Shoulders", "s-lat-raise":"Shoulders", "s-cable-lat":"Shoulders", "s-rear-delt":"Shoulders", "s-band-pullapart":"Shoulders",
+  "l-squat":"Legs", "l-rdl":"Legs", "l-lunge":"Legs", "l-stepup":"Legs", "l-calf":"Legs",
+};
+const MUSCLE_ORDER = ["Chest","Triceps","Back","Biceps","Shoulders","Legs"];
+
+const EQUIPMENT_OPTIONS = [
+  { v: "smith", label: "Smith Machine" },
+  { v: "cable", label: "Cable" },
+  { v: "dumbbell", label: "Dumbbell" },
+  { v: "band", label: "Band" },
+];
+
+const BAR_WEIGHT = 45;
+const AVAILABLE_PLATES = [45, 35, 25, 10, 5, 2.5];
+const PLATE_SIZE = { 45: 54, 35: 48, 25: 42, 10: 34, 5: 28, 2.5: 22 };
+
+function greedyPlates(amount) {
+  let remaining = amount;
+  const plates = [];
+  for (const p of AVAILABLE_PLATES) {
+    while (remaining >= p - 0.001) { plates.push(p); remaining -= p; }
+  }
+  return plates;
+}
+function smithPlates(total) {
+  const perSide = (total - BAR_WEIGHT) / 2;
+  if (perSide <= 0) return [];
+  return greedyPlates(perSide);
+}
+function cablePlates(total) {
+  if (total <= 0) return [];
+  return greedyPlates(total);
+}
+
+function PlateRow({ plates, empty }) {
+  if (empty) return <span style={{fontSize:12, color:"#6b675e"}}>{empty}</span>;
+  return (
+    <div style={{ display:"flex", alignItems:"center" }}>
+      {plates.map((p,i) => (
+        <div key={i} style={{
+          width: PLATE_SIZE[p], height: PLATE_SIZE[p], marginLeft: i===0?0:-5,
+          borderRadius: "50%", background: "#161613", border: "2px solid #3a3d38",
+          boxShadow: "inset 0 0 0 3px #0d0d0b", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0
+        }}>
+          <span className="display" style={{ fontSize: PLATE_SIZE[p] > 36 ? 12 : 9, color:"#e8e6df" }}>{p}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EquipmentVisual({ equipment, weight }) {
+  if (!weight) {
+    return <div style={{fontSize:12, color:"#6b675e"}}>Enter a weight to preview the load</div>;
+  }
+  if (equipment === "dumbbell") {
+    return (
+      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <div style={{ display:"flex", alignItems:"center" }}>
+          <div style={{ width:16, height:16, borderRadius:"50%", background:"#161613", border:"2px solid #3a3d38" }} />
+          <div style={{ width:22, height:5, background:"#4a4d46" }} />
+          <div style={{ width:16, height:16, borderRadius:"50%", background:"#161613", border:"2px solid #3a3d38" }} />
+        </div>
+        <span style={{ fontSize:12, color:"#8b877c" }}>{weight} lb per dumbbell</span>
+      </div>
+    );
+  }
+  if (equipment === "band") {
+    return <div style={{fontSize:12, color:"#8b877c"}}>Band — track by color / tension, not plate weight</div>;
+  }
+  if (equipment === "cable") {
+    const plates = cablePlates(weight);
+    return (
+      <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+        <PlateRow plates={plates} empty={plates.length===0 ? "pin only" : null} />
+        <span style={{ fontSize:12, color:"#6b675e" }}>stack total {weight} lb</span>
+      </div>
+    );
+  }
+  // smith
+  const plates = smithPlates(weight);
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+      <div style={{ height:6, width:16, borderRadius:2, background:"#4a4d46", flexShrink:0 }} />
+      <PlateRow plates={plates} empty={plates.length===0 ? "bar only (45)" : null} />
+      <span style={{ fontSize:12, color:"#6b675e" }}>per side, {weight} lb total</span>
+    </div>
+  );
+}
+
+// --- localStorage helpers ---
+function keyFor(id) { return `loadlog:${id}`; }
+function loadJSON(key, fallback) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+  catch { return fallback; }
+}
+function saveJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+  catch { return false; }
+}
+function topWeight(session) { return Math.max(...session.sets.map(s => s.weight)); }
+function dateStr(iso) { return new Date(iso).toISOString().slice(0,10); }
+
+function startOfWeek(d) {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = (day === 0 ? -6 : 1) - day;
+  date.setDate(date.getDate() + diff);
+  date.setHours(0,0,0,0);
+  return date;
+}
+function weekKey(iso) { return dateStr(startOfWeek(new Date(iso))); }
+
+function MiniLine({ data, height }) {
+  const h = height || 48, w = 260, pad = 6;
+  if (data.length < 2) return <div style={{fontSize:12, color:"#6b675e"}}>Log a couple more sessions to see a trend</div>;
+  const vals = data.map(d => d.w);
+  const min = Math.min(...vals) - 3, max = Math.max(...vals) + 3;
+  const pts = data.map((d,i) => {
+    const x = pad + (i/(data.length-1)) * (w - pad*2);
+    const y = h - pad - ((d.w - min)/(max-min || 1)) * (h - pad*2);
+    return { x, y };
+  });
+  const line = pts.map(p => `${p.x},${p.y}`).join(" ");
+  return (
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+      <polyline points={line} fill="none" stroke="#c9a227" strokeWidth="2" />
+      {pts.map((p,i) => <circle key={i} cx={p.x} cy={p.y} r="2.5" fill="#c9a227" />)}
+    </svg>
+  );
+}
+
+function MiniBars({ data, max }) {
+  const w = 260, h = 56, pad = 4, gap = 4;
+  const barW = (w - pad*2 - gap*(data.length-1)) / data.length;
+  const scaleMax = max || Math.max(1, ...data.map(d => d.v));
+  return (
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+      {data.map((d,i) => {
+        const barH = Math.max(2, (d.v / scaleMax) * (h - pad*2 - 12));
+        const x = pad + i*(barW+gap);
+        const y = h - pad - 12 - barH;
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={barW} height={barH} fill={d.v>0 ? "#7a95a3" : "#2c2c26"} rx="2" />
+            <text x={x + barW/2} y={h-2} textAnchor="middle" fontSize="8" fill="#6b675e">{d.label}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function ExerciseRow({ exercise, history, equipment, onEquipmentChange, rows, onRowChange, onAddRow, onRemoveRow, justLogged }) {
+  const [open, setOpen] = useState(false);
+  const sessions = history || [];
+  const last = sessions[sessions.length - 1];
+  const lastTop = last ? topWeight(last) : null;
+  const draftTop = Math.max(0, ...rows.filter(r => r.weight).map(r => Number(r.weight)));
+  const chartData = sessions.map((s,i) => ({ i: i+1, w: topWeight(s) }));
+  const delta = lastTop !== null && draftTop > 0 ? draftTop - lastTop : null;
+
+  return (
+    <div style={{ borderRadius:6, border:"1px solid #2c2c26", background:"#1b1b17", overflow:"hidden" }}>
+      <button onClick={() => setOpen(o=>!o)} style={{
+        width:"100%", textAlign:"left", padding:"12px 16px", background:"transparent", border:"none",
+        color:"inherit", display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer"
+      }}>
+        <div>
+          <div className="display" style={{ fontSize:19, color:"#ece8de" }}>{exercise.name}</div>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:2, flexWrap:"wrap" }}>
+            <span style={{ fontSize:12, color:"#8b877c" }}>target {exercise.target}</span>
+            {lastTop !== null &&
+              <span style={{ fontSize:12, padding:"2px 6px", borderRadius:4, background:"#242420", color:"#7a95a3" }}>
+                last top {lastTop} lb
+              </span>}
+            {justLogged &&
+              <span style={{ fontSize:12, padding:"2px 6px", borderRadius:4, background:"#2e3d2e", color:"#a9d3a9" }}>
+                logged ✓
+              </span>}
+          </div>
+        </div>
+        <span style={{ color:"#6b675e", fontSize:20 }}>{open ? "–" : "+"}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding:"0 16px 16px", borderTop:"1px solid #2c2c26" }}>
+          <div style={{ paddingTop:12, display:"flex", alignItems:"center", gap:10 }}>
+            <select value={equipment} onChange={e => onEquipmentChange(e.target.value)} style={{
+              background:"#121210", border:"1px solid #3a3d38", color:"#ece8de", fontSize:12,
+              padding:"5px 8px", borderRadius:4
+            }}>
+              {EQUIPMENT_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+            </select>
+          </div>
+
+          <div style={{ marginTop:10 }}>
+            <EquipmentVisual equipment={equipment} weight={draftTop || 0} />
+          </div>
+
+          {chartData.length > 1 && <div style={{ marginTop:12 }}><MiniLine data={chartData} /></div>}
+
+          <div style={{ marginTop:12, display:"flex", flexDirection:"column", gap:8 }}>
+            {rows.map((row, idx) => (
+              <div key={idx} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <input type="number" inputMode="numeric" placeholder="lb" value={row.weight}
+                  onChange={e => onRowChange(idx, "weight", e.target.value)}
+                  style={{ width:64, padding:"6px 8px", borderRadius:4, textAlign:"center", background:"#121210", border:"1px solid #3a3d38", color:"#ece8de" }} />
+                <span style={{ color:"#6b675e", fontSize:12 }}>×</span>
+                <input type="number" inputMode="numeric" placeholder="reps" value={row.reps}
+                  onChange={e => onRowChange(idx, "reps", e.target.value)}
+                  style={{ width:64, padding:"6px 8px", borderRadius:4, textAlign:"center", background:"#121210", border:"1px solid #3a3d38", color:"#ece8de" }} />
+                <button onClick={() => onRemoveRow(idx)} style={{ fontSize:12, color:"#6b675e", background:"none", border:"none", cursor:"pointer" }}>remove</button>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:10 }}>
+            <button onClick={onAddRow} style={{ fontSize:12, padding:"4px 8px", borderRadius:4, color:"#8b877c", background:"none", border:"1px solid #3a3d38", cursor:"pointer" }}>+ set</button>
+            {delta !== null &&
+              <span style={{ fontSize:12, color: delta >= 0 ? "#7a9d6f" : "#b06a5a" }}>
+                {delta > 0 ? `+${delta} lb vs last` : delta === 0 ? "matched last" : `${delta} lb vs last`}
+              </span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DayView({ day, history, drafts, equipmentSel, onRowChange, onAddRow, onRemoveRow, onEquipmentChange, onLogDay, justLoggedIds, banner }) {
+  return (
+    <div>
+      <div className="display" style={{ fontSize:22, color:"#ece8de", marginBottom:12 }}>{day.label}</div>
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {day.exercises.map(ex => (
+          <ExerciseRow
+            key={ex.id}
+            exercise={ex}
+            history={history[ex.id]}
+            equipment={equipmentSel[ex.id]}
+            onEquipmentChange={v => onEquipmentChange(ex.id, v)}
+            rows={drafts[ex.id]}
+            onRowChange={(idx,f,v) => onRowChange(ex.id, idx, f, v)}
+            onAddRow={() => onAddRow(ex.id)}
+            onRemoveRow={idx => onRemoveRow(ex.id, idx)}
+            justLogged={justLoggedIds.has(ex.id)}
+          />
+        ))}
+      </div>
+
+      <div style={{ marginTop:16 }}>
+        <button onClick={onLogDay} style={{
+          width:"100%", padding:"12px", borderRadius:6, fontSize:15, fontWeight:600,
+          background:"#c9a227", color:"#161613", border:"none", cursor:"pointer"
+        }}>
+          Log {day.label} Workout
+        </button>
+        {banner && <div style={{ marginTop:8, fontSize:12, color:"#7a9d6f", textAlign:"center" }}>{banner}</div>}
+      </div>
+
+      <div style={{ marginTop:16, fontSize:12, color:"#6b675e" }}>
+        Leave any exercise blank if you skipped it — only filled-in sets get logged.
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ history, workoutSessions }) {
+  const now = new Date();
+  const cutoff30 = new Date(now.getTime() - 30*24*3600*1000);
+
+  // last 8 weeks frequency
+  const weeks = [];
+  for (let i = 7; i >= 0; i--) {
+    const d = new Date(now.getTime() - i*7*24*3600*1000);
+    weeks.push(dateStr(startOfWeek(d)));
+  }
+  const sessionWeekCounts = {};
+  workoutSessions.forEach(s => {
+    const wk = weekKey(s.date);
+    sessionWeekCounts[wk] = (sessionWeekCounts[wk] || 0) + 1;
+  });
+  const weekBars = weeks.map(wk => ({
+    label: wk.slice(5),
+    v: sessionWeekCounts[wk] || 0,
+  }));
+
+  // streak
+  let streak = 0;
+  for (let i = weeks.length - 1; i >= 0; i--) {
+    if (sessionWeekCounts[weeks[i]] > 0) streak++; else break;
+  }
+
+  const totalWorkouts = workoutSessions.length;
+  const lastWorkout = workoutSessions.length
+    ? new Date(workoutSessions[workoutSessions.length-1].date).toLocaleDateString(undefined, { month:"short", day:"numeric" })
+    : "—";
+
+  // muscle group frequency last 30 days + strength trend
+  const groupStats = MUSCLE_ORDER.map(group => {
+    const exIds = Object.keys(MUSCLE_GROUP).filter(id => MUSCLE_GROUP[id] === group);
+    const allSessions = [];
+    exIds.forEach(id => (history[id] || []).forEach(s => allSessions.push(s)));
+
+    const recentDates = new Set(
+      allSessions.filter(s => new Date(s.date) >= cutoff30).map(s => dateStr(s.date))
+    );
+
+    const byWeek = {};
+    allSessions.forEach(s => {
+      const wk = weekKey(s.date);
+      if (!byWeek[wk]) byWeek[wk] = [];
+      byWeek[wk].push(topWeight(s));
+    });
+    const trend = Object.keys(byWeek).sort().map((wk,i) => ({
+      i: i+1,
+      w: Math.round((byWeek[wk].reduce((a,b)=>a+b,0) / byWeek[wk].length) * 10) / 10,
+    }));
+    const delta = trend.length >= 2 ? Math.round((trend[trend.length-1].w - trend[0].w)*10)/10 : null;
+
+    return { group, freq30: recentDates.size, trend, delta };
+  });
+
+  const maxFreq = Math.max(1, ...groupStats.map(g => g.freq30));
+
+  return (
+    <div>
+      <div className="display" style={{ fontSize:22, color:"#ece8de", marginBottom:14 }}>Dashboard</div>
+
+      <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+        <div style={{ flex:1, background:"#1b1b17", border:"1px solid #2c2c26", borderRadius:6, padding:"10px 12px" }}>
+          <div className="display" style={{ fontSize:24, color:"#c9a227" }}>{totalWorkouts}</div>
+          <div style={{ fontSize:11, color:"#8b877c" }}>total workouts logged</div>
+        </div>
+        <div style={{ flex:1, background:"#1b1b17", border:"1px solid #2c2c26", borderRadius:6, padding:"10px 12px" }}>
+          <div className="display" style={{ fontSize:24, color:"#c9a227" }}>{streak}</div>
+          <div style={{ fontSize:11, color:"#8b877c" }}>week streak</div>
+        </div>
+        <div style={{ flex:1, background:"#1b1b17", border:"1px solid #2c2c26", borderRadius:6, padding:"10px 12px" }}>
+          <div className="display" style={{ fontSize:24, color:"#c9a227" }}>{lastWorkout}</div>
+          <div style={{ fontSize:11, color:"#8b877c" }}>last workout</div>
+        </div>
+      </div>
+
+      <div style={{ background:"#1b1b17", border:"1px solid #2c2c26", borderRadius:6, padding:"12px 14px", marginBottom:14 }}>
+        <div style={{ fontSize:13, color:"#ece8de", marginBottom:6 }}>Workouts per week (last 8)</div>
+        <MiniBars data={weekBars} />
+      </div>
+
+      <div className="display" style={{ fontSize:18, color:"#ece8de", marginBottom:8 }}>By muscle group</div>
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {groupStats.map(g => (
+          <div key={g.group} style={{ background:"#1b1b17", border:"1px solid #2c2c26", borderRadius:6, padding:"12px 14px" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <span className="display" style={{ fontSize:17, color:"#ece8de" }}>{g.group}</span>
+              <span style={{ fontSize:11, color:"#8b877c" }}>{g.freq30}x in last 30 days</span>
+            </div>
+            <div style={{ marginTop:6, background:"#121210", borderRadius:3, height:5, overflow:"hidden" }}>
+              <div style={{ width:`${(g.freq30/maxFreq)*100}%`, background:"#7a95a3", height:"100%" }} />
+            </div>
+            <div style={{ marginTop:10 }}>
+              {g.trend.length >= 2 ? (
+                <>
+                  <MiniLine data={g.trend} height={40} />
+                  <div style={{ fontSize:11, marginTop:2, color: g.delta >= 0 ? "#7a9d6f" : "#b06a5a" }}>
+                    {g.delta > 0 ? `+${g.delta} lb avg top set trend` : g.delta === 0 ? "holding steady" : `${g.delta} lb avg top set trend`}
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize:11, color:"#6b675e" }}>Log a few more sessions to see a strength trend</div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function collectAllData() {
+  const ids = PLAN.flatMap(d => d.exercises.map(e => e.id));
+  const history = {};
+  ids.forEach(id => { history[id] = loadJSON(keyFor(id), []); });
+  const workoutSessions = loadJSON(keyFor("workoutSessions"), []);
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    history,
+    workoutSessions,
+  };
+}
+
+function downloadBackup() {
+  const data = collectAllData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `loadlog-backup-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  saveJSON(keyFor("lastBackupAt"), new Date().toISOString());
+  saveJSON(keyFor("sessionsSinceBackup"), 0);
+}
+
+function restoreBackup(data, onDone) {
+  if (!data || !data.history) { onDone(false, "That file doesn't look like a Load Log backup."); return; }
+  try {
+    Object.keys(data.history).forEach(id => {
+      saveJSON(keyFor(id), data.history[id]);
+    });
+    saveJSON(keyFor("workoutSessions"), data.workoutSessions || []);
+    onDone(true, "Backup restored.");
+  } catch (e) {
+    onDone(false, "Couldn't read that file.");
+  }
+}
+
+function BackupPanel({ onRestored }) {
+  const [message, setMessage] = useState("");
+  const [lastBackupAt, setLastBackupAt] = useState(loadJSON(keyFor("lastBackupAt"), null));
+  const fileInputRef = React.useRef(null);
+
+  const handleExport = () => {
+    downloadBackup();
+    setLastBackupAt(new Date().toISOString());
+    setMessage("Backup file downloaded — move it to Files or iCloud Drive to keep it safe.");
+    setTimeout(() => setMessage(""), 4000);
+  };
+
+  const handleImportClick = () => fileInputRef.current && fileInputRef.current.click();
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        restoreBackup(data, (ok, msg) => {
+          setMessage(msg);
+          if (ok && onRestored) onRestored();
+          setTimeout(() => setMessage(""), 4000);
+        });
+      } catch {
+        setMessage("Couldn't read that file — make sure it's a Load Log backup .json.");
+        setTimeout(() => setMessage(""), 4000);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  return (
+    <div>
+      <div className="display" style={{ fontSize:22, color:"#ece8de", marginBottom:14 }}>Backup</div>
+
+      <div style={{ background:"#1b1b17", border:"1px solid #2c2c26", borderRadius:6, padding:"14px 16px", marginBottom:12 }}>
+        <div style={{ fontSize:13, color:"#ece8de", marginBottom:4 }}>Save a backup</div>
+        <div style={{ fontSize:12, color:"#8b877c", marginBottom:10 }}>
+          Downloads all your logged workouts as one file. On iPhone, save it to Files or iCloud Drive when prompted —
+          that copy survives even if this app's local data ever gets cleared.
+        </div>
+        <button onClick={handleExport} style={{
+          width:"100%", padding:"10px", borderRadius:6, fontSize:14, fontWeight:600,
+          background:"#c9a227", color:"#161613", border:"none", cursor:"pointer"
+        }}>Download backup file</button>
+        <div style={{ fontSize:11, color:"#6b675e", marginTop:8 }}>
+          {lastBackupAt ? `Last backup: ${new Date(lastBackupAt).toLocaleString()}` : "No backup taken yet"}
+        </div>
+      </div>
+
+      <div style={{ background:"#1b1b17", border:"1px solid #2c2c26", borderRadius:6, padding:"14px 16px" }}>
+        <div style={{ fontSize:13, color:"#ece8de", marginBottom:4 }}>Restore from a backup</div>
+        <div style={{ fontSize:12, color:"#8b877c", marginBottom:10 }}>
+          Pick a previously downloaded backup file to restore your history. This replaces current data for any
+          exercise included in the file.
+        </div>
+        <button onClick={handleImportClick} style={{
+          width:"100%", padding:"10px", borderRadius:6, fontSize:14, fontWeight:600,
+          background:"#1b1b17", color:"#ece8de", border:"1px solid #3a3d38", cursor:"pointer"
+        }}>Choose backup file</button>
+        <input ref={fileInputRef} type="file" accept="application/json" style={{ display:"none" }} onChange={handleFileChange} />
+      </div>
+
+      {message && <div style={{ marginTop:12, fontSize:12, color:"#7a9d6f" }}>{message}</div>}
+    </div>
+  );
+}
+
+function blankRows() { return [{ weight: "", reps: "" }]; }
+
+function App() {
+  const [view, setView] = useState("log");
+  const [activeDay, setActiveDay] = useState(PLAN[0].id);
+  const [history, setHistory] = useState({});
+  const [workoutSessions, setWorkoutSessions] = useState([]);
+  const [drafts, setDrafts] = useState(() => {
+    const d = {};
+    PLAN.forEach(day => day.exercises.forEach(ex => { d[ex.id] = blankRows(); }));
+    return d;
+  });
+  const [equipmentSel, setEquipmentSel] = useState(() => {
+    const e = {};
+    PLAN.forEach(day => day.exercises.forEach(ex => { e[ex.id] = EQUIPMENT_DEFAULT[ex.id] || "dumbbell"; }));
+    return e;
+  });
+  const [justLoggedIds, setJustLoggedIds] = useState(new Set());
+  const [banner, setBanner] = useState("");
+
+  const reloadAll = useCallback(() => {
+    const ids = PLAN.flatMap(d => d.exercises.map(e => e.id));
+    const all = {};
+    ids.forEach(id => { all[id] = loadJSON(keyFor(id), []); });
+    setHistory(all);
+    setWorkoutSessions(loadJSON(keyFor("workoutSessions"), []));
+  }, []);
+
+  useEffect(() => { reloadAll(); }, [reloadAll]);
+
+  const handleRowChange = (exId, idx, field, value) => {
+    setDrafts(d => ({
+      ...d,
+      [exId]: d[exId].map((row,i) => i===idx ? { ...row, [field]: value } : row),
+    }));
+  };
+  const handleAddRow = exId => setDrafts(d => ({ ...d, [exId]: [...d[exId], { weight:"", reps:"" }] }));
+  const handleRemoveRow = (exId, idx) => setDrafts(d => ({
+    ...d, [exId]: d[exId].length > 1 ? d[exId].filter((_,i) => i!==idx) : d[exId],
+  }));
+  const handleEquipmentChange = (exId, v) => setEquipmentSel(e => ({ ...e, [exId]: v }));
+
+  const handleLogDay = () => {
+    const day = PLAN.find(d => d.id === activeDay);
+    const now = new Date().toISOString();
+    const newHistory = { ...history };
+    const loggedIds = [];
+
+    day.exercises.forEach(ex => {
+      const rows = drafts[ex.id] || [];
+      const clean = rows
+        .filter(r => r.weight !== "" && r.reps !== "" && !isNaN(Number(r.weight)) && !isNaN(Number(r.reps)))
+        .map(r => ({ weight: Number(r.weight), reps: Number(r.reps) }));
+      if (clean.length === 0) return; // skip blank exercise, no error
+      const session = { date: now, equipment: equipmentSel[ex.id], sets: clean };
+      const updated = [...(newHistory[ex.id] || []), session];
+      newHistory[ex.id] = updated;
+      saveJSON(keyFor(ex.id), updated);
+      loggedIds.push(ex.id);
+    });
+
+    if (loggedIds.length === 0) {
+      setBanner("Nothing entered — add at least one exercise before logging.");
+      setTimeout(() => setBanner(""), 2500);
+      return;
+    }
+
+    setHistory(newHistory);
+
+    const newSessions = [...workoutSessions, { date: now, dayId: day.id }];
+    setWorkoutSessions(newSessions);
+    saveJSON(keyFor("workoutSessions"), newSessions);
+
+    // reset drafts for this day only
+    setDrafts(d => {
+      const nd = { ...d };
+      day.exercises.forEach(ex => { nd[ex.id] = blankRows(); });
+      return nd;
+    });
+
+    setJustLoggedIds(new Set(loggedIds));
+
+    const sinceBackup = (loadJSON(keyFor("sessionsSinceBackup"), 0)) + 1;
+    saveJSON(keyFor("sessionsSinceBackup"), sinceBackup);
+    const lastBackupAt = loadJSON(keyFor("lastBackupAt"), null);
+    const daysSinceBackup = lastBackupAt ? (Date.now() - new Date(lastBackupAt).getTime()) / 86400000 : Infinity;
+
+    let msg = `Logged ${loggedIds.length} of ${day.exercises.length} exercises for ${day.label}.`;
+    if (sinceBackup >= 4 || daysSinceBackup >= 7) {
+      msg += " Consider backing up your data — see the Backup tab.";
+    }
+    setBanner(msg);
+    setTimeout(() => { setJustLoggedIds(new Set()); setBanner(""); }, 4000);
+  };
+
+  const day = PLAN.find(d => d.id === activeDay);
+
+  return (
+    <div style={{ minHeight:"100vh", width:"100%", background:"#121210", color:"#ece8de" }}>
+      <div style={{ maxWidth:480, margin:"0 auto", padding:"24px 16px 40px" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
+          <div>
+            <div className="display" style={{ fontSize:30, color:"#ece8de", lineHeight:1 }}>LOAD LOG</div>
+            <div style={{ fontSize:12, marginTop:4, color:"#8b877c" }}>4-day split · progressive overload tracker</div>
+          </div>
+          <div style={{ display:"flex", gap:6 }}>
+            <button onClick={() => setView("log")} style={{
+              fontSize:12, padding:"6px 10px", borderRadius:4, cursor:"pointer",
+              background: view==="log" ? "#c9a227" : "#1b1b17", color: view==="log" ? "#161613" : "#8b877c",
+              border: `1px solid ${view==="log" ? "#c9a227" : "#2c2c26"}`
+            }}>Log</button>
+            <button onClick={() => setView("dashboard")} style={{
+              fontSize:12, padding:"6px 10px", borderRadius:4, cursor:"pointer",
+              background: view==="dashboard" ? "#c9a227" : "#1b1b17", color: view==="dashboard" ? "#161613" : "#8b877c",
+              border: `1px solid ${view==="dashboard" ? "#c9a227" : "#2c2c26"}`
+            }}>Dashboard</button>
+            <button onClick={() => setView("backup")} style={{
+              fontSize:12, padding:"6px 10px", borderRadius:4, cursor:"pointer",
+              background: view==="backup" ? "#c9a227" : "#1b1b17", color: view==="backup" ? "#161613" : "#8b877c",
+              border: `1px solid ${view==="backup" ? "#c9a227" : "#2c2c26"}`
+            }}>Backup</button>
+          </div>
+        </div>
+
+        {view === "log" && (
+          <>
+            <div style={{ display:"flex", gap:8, marginBottom:20, overflowX:"auto", paddingBottom:4 }}>
+              {PLAN.map(d => {
+                const active = d.id === activeDay;
+                return (
+                  <button key={d.id} onClick={() => setActiveDay(d.id)} style={{
+                    flexShrink:0, width:64, height:64, borderRadius:"50%", cursor:"pointer",
+                    background: active ? "#161613" : "#1b1b17",
+                    border: `2px solid ${active ? "#c9a227" : "#2c2c26"}`
+                  }}>
+                    <span className="display" style={{ fontSize:18, color: active ? "#c9a227" : "#8b877c" }}>{d.num}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <DayView
+              day={day}
+              history={history}
+              drafts={drafts}
+              equipmentSel={equipmentSel}
+              onRowChange={handleRowChange}
+              onAddRow={handleAddRow}
+              onRemoveRow={handleRemoveRow}
+              onEquipmentChange={handleEquipmentChange}
+              onLogDay={handleLogDay}
+              justLoggedIds={justLoggedIds}
+              banner={banner}
+            />
+          </>
+        )}
+
+        {view === "dashboard" && <Dashboard history={history} workoutSessions={workoutSessions} />}
+        {view === "backup" && <BackupPanel onRestored={reloadAll} />}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
