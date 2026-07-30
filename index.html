@@ -17,11 +17,30 @@
 </style>
 </head>
 <body>
-<div id="root"></div>
+<div id="root">
+  <div id="fallback" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;color:#ece8de;font-family:sans-serif;">
+    Loading Load Log…
+  </div>
+</div>
+<div id="error-box" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#3a1414;color:#ffb4b4;font-size:12px;padding:12px 16px;font-family:monospace;white-space:pre-wrap;max-height:40vh;overflow:auto;z-index:9999;"></div>
 
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script>
+  function showError(msg) {
+    var box = document.getElementById('error-box');
+    box.style.display = 'block';
+    box.textContent = 'Error: ' + msg;
+  }
+  window.onerror = function(msg, url, line, col) {
+    showError(msg + ' (line ' + line + ')');
+  };
+  window.addEventListener('unhandledrejection', function(e) {
+    showError('Promise rejection: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
+  });
+</script>
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js" onerror="showError('React failed to load from CDN — check your internet connection.')"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" onerror="showError('ReactDOM failed to load from CDN — check your internet connection.')"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js" onerror="showError('Babel failed to load from CDN — check your internet connection.')"></script>
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useCallback, useMemo } = React;
