@@ -49,6 +49,13 @@
   window.addEventListener('unhandledrejection', function(e) {
     showError('Promise rejection: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
   });
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('./sw.js').catch(function() {
+        // offline support unavailable; app still works online as normal
+      });
+    });
+  }
 </script>
 
 <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" onerror="showError('React failed to load from CDN — check your internet connection.')"></script>
@@ -390,9 +397,19 @@ function SessionHistory({ sessions, onEdit, onDelete }) {
   );
 }
 
-function ExerciseRow({ exercise, history, equipment, onEquipmentChange, rows, onRowChange, onAddRow, onRemoveRow, justLogged, onAutofill, onEditSession, onDeleteSession }) {
+function ExerciseRow({ exercise, history, equipment, onEquipmentChange, rows, onRowChange, onAddRow, onDuplicateLastSet, onRemoveRow, justLogged, onAutofill, onEditSession, onDeleteSession }) {
   const [open, setOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const weightRefs = React.useRef({});
+  const repsRefs = React.useRef({});
+  const advanceTimers = React.useRef({});
+
+  const scheduleAdvance = (key, fromEl, toEl) => {
+    if (advanceTimers.current[key]) clearTimeout(advanceTimers.current[key]);
+    advanceTimers.current[key] = setTimeout(() => {
+      if (toEl && document.activeElement === fromEl) toEl.focus();
+    }, 550);
+  };
   const sessions = history || [];
   const last = sessions[sessions.length - 1];
   const lastTop = last ? topWeight(last) : null;
@@ -484,23 +501,46 @@ function ExerciseRow({ exercise, history, equipment, onEquipmentChange, rows, on
                 <button onClick={() => onRowChange(idx, "weight", String(Math.max(0, (Number(row.weight)||0) - 5)))} style={{
                   width:26, height:30, borderRadius:4, background:"#121210", border:"1px solid #3a3d38", color:"#8b877c", fontSize:15, cursor:"pointer"
                 }}>–</button>
-                <input type="number" inputMode="numeric" placeholder="lb" value={row.weight}
-                  onChange={e => onRowChange(idx, "weight", e.target.value)}
+                <input type="text" inputMode="numeric" pattern="[0-9]*" enterKeyHint="next" placeholder="lb" value={row.weight}
+                  ref={el => weightRefs.current[idx] = el}
+                  onChange={e => {
+                    onRowChange(idx, "weight", e.target.value);
+                    if (e.target.value) scheduleAdvance(`w-${idx}`, weightRefs.current[idx], repsRefs.current[idx]);
+                  }}
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); repsRefs.current[idx] && repsRefs.current[idx].focus(); } }}
                   style={{ width:56, padding:"6px 4px", borderRadius:4, textAlign:"center", background:"#121210", border:"1px solid #3a3d38", color:"#ece8de" }} />
                 <button onClick={() => onRowChange(idx, "weight", String((Number(row.weight)||0) + 5))} style={{
                   width:26, height:30, borderRadius:4, background:"#121210", border:"1px solid #3a3d38", color:"#8b877c", fontSize:15, cursor:"pointer"
                 }}>+</button>
                 <span style={{ color:"#6b675e", fontSize:12 }}>×</span>
-                <input type="number" inputMode="numeric" placeholder="reps" value={row.reps}
-                  onChange={e => onRowChange(idx, "reps", e.target.value)}
+                <input type="text" inputMode="numeric" pattern="[0-9]*" enterKeyHint={idx < rows.length - 1 ? "next" : "done"} placeholder="reps" value={row.reps}
+                  ref={el => repsRefs.current[idx] = el}
+                  onChange={e => {
+                    onRowChange(idx, "reps", e.target.value);
+                    if (e.target.value && idx < rows.length - 1) scheduleAdvance(`r-${idx}`, repsRefs.current[idx], weightRefs.current[idx + 1]);
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (weightRefs.current[idx + 1]) weightRefs.current[idx + 1].focus();
+                      else e.target.blur();
+                    }
+                  }}
                   style={{ width:56, padding:"6px 4px", borderRadius:4, textAlign:"center", background:"#121210", border:"1px solid #3a3d38", color:"#ece8de" }} />
                 <button onClick={() => onRemoveRow(idx)} style={{ fontSize:12, color:"#6b675e", background:"none", border:"none", cursor:"pointer" }}>remove</button>
               </div>
             ))}
           </div>
 
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:10 }}>
-            <button onClick={onAddRow} style={{ fontSize:12, padding:"4px 8px", borderRadius:4, color:"#8b877c", background:"none", border:"1px solid #3a3d38", cursor:"pointer" }}>+ set</button>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:10, flexWrap:"wrap", gap:8 }}>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              <button onClick={onAddRow} style={{ fontSize:12, padding:"4px 8px", borderRadius:4, color:"#8b877c", background:"none", border:"1px solid #3a3d38", cursor:"pointer" }}>+ set</button>
+              {rows.length > 0 && rows[rows.length - 1].weight !== "" && (
+                <button onClick={onDuplicateLastSet} style={{ fontSize:12, padding:"4px 8px", borderRadius:4, color:"#8b877c", background:"none", border:"1px solid #3a3d38", cursor:"pointer" }}>
+                  + same weight
+                </button>
+              )}
+            </div>
             {delta !== null &&
               <span style={{ fontSize:12, color: delta >= 0 ? "#7a9d6f" : "#b06a5a" }}>
                 {delta > 0 ? `+${delta} lb vs last` : delta === 0 ? "matched last" : `${delta} lb vs last`}
@@ -512,7 +552,7 @@ function ExerciseRow({ exercise, history, equipment, onEquipmentChange, rows, on
   );
 }
 
-function DayView({ day, history, drafts, equipmentSel, onRowChange, onAddRow, onRemoveRow, onEquipmentChange, onLogDay, justLoggedIds, banner, onAutofill, onEditSession, onDeleteSession }) {
+function DayView({ day, history, drafts, equipmentSel, onRowChange, onAddRow, onDuplicateLastSet, onRemoveRow, onEquipmentChange, onLogDay, justLoggedIds, banner, onAutofill, onEditSession, onDeleteSession }) {
   return (
     <div>
       <div className="display" style={{ fontSize:22, color:"#ece8de", marginBottom:12 }}>{day.label}</div>
@@ -535,6 +575,7 @@ function DayView({ day, history, drafts, equipmentSel, onRowChange, onAddRow, on
             rows={drafts[ex.id]}
             onRowChange={(idx,f,v) => onRowChange(ex.id, idx, f, v)}
             onAddRow={() => onAddRow(ex.id)}
+            onDuplicateLastSet={() => onDuplicateLastSet(ex.id)}
             onRemoveRow={idx => onRemoveRow(ex.id, idx)}
             justLogged={justLoggedIds.has(ex.id)}
             onAutofill={sets => onAutofill(ex.id, sets)}
@@ -557,6 +598,9 @@ function DayView({ day, history, drafts, equipmentSel, onRowChange, onAddRow, on
         padding:"20px 16px calc(16px + env(safe-area-inset-bottom))"
       }}>
         <div style={{ maxWidth:480, margin:"0 auto" }}>
+          <div style={{ textAlign:"center", fontSize:11, color:"#8b877c", marginBottom:6 }}>
+            Logging for {new Date().toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" })}
+          </div>
           <button onClick={onLogDay} style={{
             width:"100%", padding:"14px", borderRadius:8, fontSize:15, fontWeight:600,
             background:"#cc7a3c", color:"#161613", border:"none", cursor:"pointer",
@@ -909,6 +953,17 @@ function App() {
 
   useEffect(() => { reloadAll(); }, [reloadAll]);
 
+  useEffect(() => {
+    const sessions = loadJSON(keyFor("workoutSessions"), []);
+    if (!sessions.length) return;
+    const lastDayId = sessions[sessions.length - 1].dayId;
+    const idx = PLAN.findIndex(d => d.id === lastDayId);
+    if (idx === -1) return;
+    const nextDay = PLAN[(idx + 1) % PLAN.length];
+    setActiveDay(nextDay.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleRowChange = (exId, idx, field, value) => {
     setDrafts(d => ({
       ...d,
@@ -916,6 +971,11 @@ function App() {
     }));
   };
   const handleAddRow = exId => setDrafts(d => ({ ...d, [exId]: [...d[exId], { weight:"", reps:"" }] }));
+  const handleDuplicateLastSet = exId => setDrafts(d => {
+    const rows = d[exId];
+    const lastWeight = rows.length ? rows[rows.length - 1].weight : "";
+    return { ...d, [exId]: [...rows, { weight: lastWeight, reps: "" }] };
+  });
   const handleRemoveRow = (exId, idx) => setDrafts(d => ({
     ...d, [exId]: d[exId].length > 1 ? d[exId].filter((_,i) => i!==idx) : d[exId],
   }));
@@ -943,6 +1003,13 @@ function App() {
 
   const handleLogDay = () => {
     const day = PLAN.find(d => d.id === activeDay);
+    const today = dateStr(new Date());
+    const alreadyLoggedToday = workoutSessions.some(s => s.dayId === activeDay && dateStr(s.date) === today);
+    if (alreadyLoggedToday) {
+      const proceed = window.confirm(`You already logged ${day.label} today. Log it again?`);
+      if (!proceed) return;
+    }
+
     const now = new Date().toISOString();
     const newHistory = { ...history };
     const loggedIds = [];
@@ -1055,6 +1122,7 @@ function App() {
               equipmentSel={equipmentSel}
               onRowChange={handleRowChange}
               onAddRow={handleAddRow}
+              onDuplicateLastSet={handleDuplicateLastSet}
               onRemoveRow={handleRemoveRow}
               onEquipmentChange={handleEquipmentChange}
               onLogDay={handleLogDay}
