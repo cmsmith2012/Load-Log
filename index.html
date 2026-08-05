@@ -65,60 +65,123 @@
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useCallback, useMemo } = React;
 
-const PLAN = [
-  { id: "d1", num: "01", label: "Chest / Triceps", exercises: [
-    { id: "c-bench", name: "Smith Machine Bench Press", target: "4 x 6-8" },
-    { id: "c-incline", name: "Incline DB Press", target: "3 x 8-10" },
-    { id: "c-fly", name: "Cable Fly", target: "3 x 10-12" },
-    { id: "c-cgp", name: "Smith Machine Close-Grip Press", target: "3 x 8-10" },
-    { id: "c-rope-push", name: "Rope Tricep Pushdown", target: "3 x 10-12" },
-    { id: "c-oh-tri", name: "Overhead Cable Tricep Extension", target: "2 x 12" },
-  ]},
-  { id: "d2", num: "02", label: "Back / Biceps", exercises: [
-    { id: "b-row", name: "Smith Machine Bent-Over Row", target: "4 x 6-8" },
-    { id: "b-latpull", name: "Lat Pulldown", target: "3 x 8-10" },
-    { id: "b-single-row", name: "Single-Arm Cable Row", target: "3 x 8-10 ea" },
-    { id: "b-facepull", name: "Face Pulls", target: "3 x 12-15" },
-    { id: "b-curl", name: "DB / Cable Curls", target: "3 x 8-10" },
-    { id: "b-hammer", name: "Hammer Curls", target: "2 x 10-12" },
-  ]},
-  { id: "d3", num: "03", label: "Shoulders", exercises: [
-    { id: "s-ohp", name: "Smith Machine Overhead Press", target: "4 x 6-8" },
-    { id: "s-lat-raise", name: "DB Lateral Raises", target: "3 x 12-15" },
-    { id: "s-cable-lat", name: "Cable Lateral Raises", target: "2 x 12-15" },
-    { id: "s-rear-delt", name: "Rear Delt Fly / Face Pull", target: "3 x 12-15" },
-    { id: "s-band-pullapart", name: "Band Pull-Aparts", target: "2 x 15-20" },
-  ]},
-  { id: "d4", num: "04", label: "Legs", exercises: [
-    { id: "l-squat", name: "Smith Machine Squats", target: "4 x 6-8" },
-    { id: "l-rdl", name: "Smith Machine RDLs", target: "3 x 8-10" },
-    { id: "l-lunge", name: "DB Walking Lunges", target: "3 x 10 ea" },
-    { id: "l-stepup", name: "DB Step-Ups", target: "2 x 10 ea" },
-    { id: "l-calf", name: "Standing Calf Raises", target: "4 x 12-15" },
-  ]},
+// ---------------------------------------------------------------------------
+// Exercise database — every movement the B52 + dumbbells + bands can do,
+// tagged by muscle, compound/isolation, and default equipment visualization.
+// ---------------------------------------------------------------------------
+const EX = {
+  // Chest
+  "c-bench":                { name:"Smith Machine Bench Press",          muscle:"Chest",    cat:"compound",  eq:"smith" },
+  "db-incline-press":       { name:"Incline DB Press",                   muscle:"Chest",    cat:"compound",  eq:"dumbbell" },
+  "smith-incline-bench":    { name:"Smith Machine Incline Press",        muscle:"Chest",    cat:"compound",  eq:"smith" },
+  "weighted-dips-chest":    { name:"Weighted Dips (chest lean)",         muscle:"Chest",    cat:"compound",  eq:"bodyweight" },
+  "cable-fly-mid":          { name:"Cable Fly",                         muscle:"Chest",    cat:"isolation", eq:"cable" },
+  "cable-fly-low-high":     { name:"Low-to-High Cable Fly",              muscle:"Chest",    cat:"isolation", eq:"cable" },
+  "cable-fly-high-low":     { name:"High-to-Low Cable Fly",              muscle:"Chest",    cat:"isolation", eq:"cable" },
+  "db-fly":                 { name:"DB Fly",                            muscle:"Chest",    cat:"isolation", eq:"dumbbell" },
+  // Triceps
+  "c-cgp":                  { name:"Smith Machine Close-Grip Press",     muscle:"Triceps",  cat:"compound",  eq:"smith" },
+  "rope-pushdown":          { name:"Rope Tricep Pushdown",               muscle:"Triceps",  cat:"isolation", eq:"cable" },
+  "db-skull-crushers":      { name:"DB Skull Crushers",                  muscle:"Triceps",  cat:"isolation", eq:"dumbbell" },
+  "oh-cable-tri-ext":       { name:"Overhead Cable Tricep Extension",    muscle:"Triceps",  cat:"isolation", eq:"cable" },
+  "single-arm-oh-ext":      { name:"Single-Arm Overhead Extension",      muscle:"Triceps",  cat:"isolation", eq:"dumbbell" },
+  // Back
+  "b-row":                  { name:"Smith Machine Bent-Over Row",        muscle:"Back",     cat:"compound",  eq:"smith" },
+  "lat-pulldown":           { name:"Lat Pulldown",                       muscle:"Back",     cat:"compound",  eq:"cable" },
+  "pull-ups":                { name:"Pull-Ups",                          muscle:"Back",     cat:"compound",  eq:"bodyweight" },
+  "chin-ups":                { name:"Chin-Ups",                          muscle:"Back",     cat:"compound",  eq:"bodyweight" },
+  "single-arm-cable-row":   { name:"Single-Arm Cable Row",               muscle:"Back",     cat:"compound",  eq:"cable" },
+  "landmine-row":           { name:"Landmine Row",                       muscle:"Back",     cat:"compound",  eq:"cable" },
+  "face-pulls-back":        { name:"Face Pulls",                        muscle:"Back",     cat:"isolation", eq:"cable" },
+  "straight-arm-pulldown":  { name:"Straight-Arm Pulldown",              muscle:"Back",     cat:"isolation", eq:"cable" },
+  "db-shrug":                { name:"DB Shrugs",                        muscle:"Back",     cat:"isolation", eq:"dumbbell" },
+  // Biceps
+  "db-curl":                 { name:"DB Curl",                          muscle:"Biceps",   cat:"isolation", eq:"dumbbell" },
+  "cable-curl":              { name:"Cable Curl",                        muscle:"Biceps",   cat:"isolation", eq:"cable" },
+  "hammer-curl":             { name:"Hammer Curl",                       muscle:"Biceps",   cat:"isolation", eq:"dumbbell" },
+  "incline-db-curl":         { name:"Incline DB Curl",                   muscle:"Biceps",   cat:"isolation", eq:"dumbbell" },
+  // Shoulders
+  "s-ohp":                   { name:"Smith Machine Overhead Press",      muscle:"Shoulders",cat:"compound",  eq:"smith" },
+  "db-lateral-raise":        { name:"DB Lateral Raises",                 muscle:"Shoulders",cat:"isolation", eq:"dumbbell" },
+  "cable-lateral-raise":     { name:"Cable Lateral Raises",              muscle:"Shoulders",cat:"isolation", eq:"cable" },
+  "cable-front-raise":       { name:"Cable Front Raise",                 muscle:"Shoulders",cat:"isolation", eq:"cable" },
+  "db-front-raise":          { name:"DB Front Raise",                    muscle:"Shoulders",cat:"isolation", eq:"dumbbell" },
+  "rear-delt-fly":           { name:"Rear Delt Fly",                     muscle:"Shoulders",cat:"isolation", eq:"dumbbell" },
+  "face-pulls-shoulder":     { name:"Face Pulls",                       muscle:"Shoulders",cat:"isolation", eq:"cable" },
+  "s-band-pullapart":        { name:"Band Pull-Aparts",                  muscle:"Shoulders",cat:"isolation", eq:"band" },
+  // Legs
+  "l-squat":                  { name:"Smith Machine Squats",             muscle:"Legs",     cat:"compound",  eq:"smith" },
+  "l-rdl":                    { name:"Smith Machine RDLs",                muscle:"Legs",     cat:"compound",  eq:"smith" },
+  "db-walking-lunge":         { name:"DB Walking Lunges",                muscle:"Legs",     cat:"compound",  eq:"dumbbell" },
+  "db-step-up":               { name:"DB Step-Ups",                      muscle:"Legs",     cat:"compound",  eq:"dumbbell" },
+  "bulgarian-split-squat-smith": { name:"Bulgarian Split Squat (Smith)", muscle:"Legs",     cat:"compound",  eq:"smith" },
+  "leg-extension":             { name:"Leg Extension",                   muscle:"Legs",     cat:"isolation", eq:"cable" },
+  "l-calf":                    { name:"Standing Calf Raises",             muscle:"Legs",     cat:"isolation", eq:"dumbbell" },
+};
+
+// ---------------------------------------------------------------------------
+// Slot templates — each day is a fixed set of slots. "fixed" slots always
+// use the same exercise (your long-term anchor lifts). "rotating" slots
+// draw from a pool and change every completed block.
+// ---------------------------------------------------------------------------
+const SLOT_TEMPLATES = {
+  d1: [
+    { id:"c-bench",       fixed:true,  target:"4 x 6-8",   options:["c-bench"] },
+    { id:"c-incline",     fixed:false, target:"3 x 8-10",  options:["db-incline-press","smith-incline-bench","weighted-dips-chest"] },
+    { id:"c-fly",         fixed:false, target:"3 x 10-12", options:["cable-fly-mid","cable-fly-low-high","cable-fly-high-low","db-fly"] },
+    { id:"c-cgp",         fixed:true,  target:"3 x 8-10",  options:["c-cgp"] },
+    { id:"c-tri-iso-a",   fixed:false, target:"3 x 10-12", options:["rope-pushdown","db-skull-crushers"] },
+    { id:"c-tri-iso-b",   fixed:false, target:"2 x 12",    options:["oh-cable-tri-ext","single-arm-oh-ext"] },
+  ],
+  d2: [
+    { id:"b-row",           fixed:true,  target:"4 x 6-8",   options:["b-row"] },
+    { id:"b-vertical-pull", fixed:false, target:"3 x 8-10",  options:["lat-pulldown","pull-ups","chin-ups"] },
+    { id:"b-horizontal-pull",fixed:false,target:"3 x 8-10 ea",options:["single-arm-cable-row","landmine-row"] },
+    { id:"b-back-iso",      fixed:false, target:"3 x 12-15", options:["face-pulls-back","straight-arm-pulldown","db-shrug"] },
+    { id:"b-curl-a",        fixed:false, target:"3 x 8-10",  options:["db-curl","cable-curl"] },
+    { id:"b-curl-b",        fixed:false, target:"2 x 10-12", options:["hammer-curl","incline-db-curl"] },
+  ],
+  d3: [
+    { id:"s-ohp",            fixed:true,  target:"4 x 6-8",   options:["s-ohp"] },
+    { id:"s-lateral",        fixed:false, target:"3 x 12-15", options:["db-lateral-raise","cable-lateral-raise"] },
+    { id:"s-front-raise",    fixed:false, target:"2 x 12-15", options:["cable-front-raise","db-front-raise"] },
+    { id:"s-rear-delt",      fixed:false, target:"3 x 12-15", options:["rear-delt-fly","face-pulls-shoulder"] },
+    { id:"s-band-pullapart", fixed:true,  target:"2 x 15-20", options:["s-band-pullapart"] },
+  ],
+  d4: [
+    { id:"l-squat",      fixed:true,  target:"4 x 6-8",   options:["l-squat"] },
+    { id:"l-rdl",        fixed:true,  target:"3 x 8-10",  options:["l-rdl"] },
+    { id:"l-unilateral", fixed:false, target:"3 x 10 ea", options:["db-walking-lunge","db-step-up","bulgarian-split-squat-smith"] },
+    { id:"l-quad-iso",   fixed:false, target:"3 x 12-15", options:["leg-extension"] },
+    { id:"l-calf",       fixed:true,  target:"4 x 12-15", options:["l-calf"] },
+  ],
+};
+
+const PLAN_META = [
+  { id:"d1", num:"01", label:"Chest / Triceps" },
+  { id:"d2", num:"02", label:"Back / Biceps" },
+  { id:"d3", num:"03", label:"Shoulders" },
+  { id:"d4", num:"04", label:"Legs" },
 ];
 
-const EQUIPMENT_DEFAULT = {
-  "c-bench":"smith", "c-incline":"dumbbell", "c-fly":"cable", "c-cgp":"smith", "c-rope-push":"cable", "c-oh-tri":"cable",
-  "b-row":"smith", "b-latpull":"cable", "b-single-row":"cable", "b-facepull":"cable", "b-curl":"dumbbell", "b-hammer":"dumbbell",
-  "s-ohp":"smith", "s-lat-raise":"dumbbell", "s-cable-lat":"cable", "s-rear-delt":"cable", "s-band-pullapart":"band",
-  "l-squat":"smith", "l-rdl":"smith", "l-lunge":"dumbbell", "l-stepup":"dumbbell", "l-calf":"dumbbell",
+const ROTATION_BLOCK_WEEKS = 6;
+
+// migrating old single-exercise-per-slot history into the new exercise-id keyed storage
+const MIGRATION_MAP = {
+  "c-incline":"db-incline-press", "c-fly":"cable-fly-mid", "c-rope-push":"rope-pushdown", "c-oh-tri":"oh-cable-tri-ext",
+  "b-latpull":"lat-pulldown", "b-single-row":"single-arm-cable-row", "b-facepull":"face-pulls-back",
+  "b-curl":"db-curl", "b-hammer":"hammer-curl",
+  "s-lat-raise":"db-lateral-raise", "s-cable-lat":"cable-lateral-raise", "s-rear-delt":"rear-delt-fly",
+  "l-lunge":"db-walking-lunge", "l-stepup":"db-step-up",
 };
 
-const MUSCLE_GROUP = {
-  "c-bench":"Chest", "c-incline":"Chest", "c-fly":"Chest",
-  "c-cgp":"Triceps", "c-rope-push":"Triceps", "c-oh-tri":"Triceps",
-  "b-row":"Back", "b-latpull":"Back", "b-single-row":"Back", "b-facepull":"Back",
-  "b-curl":"Biceps", "b-hammer":"Biceps",
-  "s-ohp":"Shoulders", "s-lat-raise":"Shoulders", "s-cable-lat":"Shoulders", "s-rear-delt":"Shoulders", "s-band-pullapart":"Shoulders",
-  "l-squat":"Legs", "l-rdl":"Legs", "l-lunge":"Legs", "l-stepup":"Legs", "l-calf":"Legs",
-};
 const MUSCLE_ORDER = ["Chest","Triceps","Back","Biceps","Shoulders","Legs"];
 
 const EQUIPMENT_OPTIONS = [
   { v: "smith", label: "Smith Machine" },
   { v: "cable", label: "Cable" },
   { v: "dumbbell", label: "Dumbbell" },
+  { v: "bodyweight", label: "Bodyweight" },
   { v: "band", label: "Band" },
 ];
 
@@ -162,6 +225,14 @@ function PlateRow({ plates, empty }) {
 }
 
 function EquipmentVisual({ equipment, weight }) {
+  if (equipment === "bodyweight") {
+    const w = Number(weight) || 0;
+    return (
+      <div style={{ fontSize:12, color:"#8b877c" }}>
+        {w > 0 ? `Bodyweight + ${w} lb added` : "Bodyweight only"}
+      </div>
+    );
+  }
   if (!weight) {
     return <div style={{fontSize:12, color:"#6b675e"}}>Enter a weight to preview the load</div>;
   }
@@ -552,10 +623,15 @@ function ExerciseRow({ exercise, history, equipment, onEquipmentChange, rows, on
   );
 }
 
-function DayView({ day, history, drafts, equipmentSel, onRowChange, onAddRow, onDuplicateLastSet, onRemoveRow, onEquipmentChange, onLogDay, justLoggedIds, banner, onAutofill, onEditSession, onDeleteSession }) {
+function DayView({ dayMeta, exercises, history, drafts, equipmentSel, onRowChange, onAddRow, onDuplicateLastSet, onRemoveRow, onEquipmentChange, onLogDay, justLoggedIds, banner, onAutofill, onEditSession, onDeleteSession, blockState, workoutSessions }) {
+  const weeksIn = Math.min(ROTATION_BLOCK_WEEKS, activeWeeksSince(blockState.blockStartDate, workoutSessions));
+
   return (
     <div>
-      <div className="display" style={{ fontSize:22, color:"#ece8de", marginBottom:12 }}>{day.label}</div>
+      <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:12, flexWrap:"wrap", gap:6 }}>
+        <div className="display" style={{ fontSize:22, color:"#ece8de" }}>{dayMeta.label}</div>
+        <div style={{ fontSize:11, color:"#6b675e" }}>Block week {weeksIn} of {ROTATION_BLOCK_WEEKS}</div>
+      </div>
 
       {banner && (
         <div className="fade-in" style={{
@@ -565,7 +641,7 @@ function DayView({ day, history, drafts, equipmentSel, onRowChange, onAddRow, on
       )}
 
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-        {day.exercises.map(ex => (
+        {exercises.map(ex => (
           <ExerciseRow
             key={ex.id}
             exercise={ex}
@@ -606,7 +682,7 @@ function DayView({ day, history, drafts, equipmentSel, onRowChange, onAddRow, on
             background:"#cc7a3c", color:"#161613", border:"none", cursor:"pointer",
             boxShadow:"0 4px 14px rgba(0,0,0,0.5)"
           }}>
-            Log {day.label} Workout
+            Log {dayMeta.label} Workout
           </button>
         </div>
       </div>
@@ -658,7 +734,7 @@ function Dashboard({ history, workoutSessions }) {
 
   // muscle group frequency last 30 days + strength trend
   const groupStats = MUSCLE_ORDER.map(group => {
-    const exIds = Object.keys(MUSCLE_GROUP).filter(id => MUSCLE_GROUP[id] === group);
+    const exIds = Object.keys(EX).filter(id => EX[id].muscle === group);
     const allSessions = [];
     exIds.forEach(id => (history[id] || []).forEach(s => allSessions.push(s)));
 
@@ -752,7 +828,7 @@ function Dashboard({ history, workoutSessions }) {
 }
 
 function collectAllData() {
-  const ids = PLAN.flatMap(d => d.exercises.map(e => e.id));
+  const ids = Object.keys(EX);
   const history = {};
   ids.forEach(id => { history[id] = loadJSON(keyFor(id), []); });
   const workoutSessions = loadJSON(keyFor("workoutSessions"), []);
@@ -925,30 +1001,121 @@ function BodyweightPanel() {
 
 function blankRows() { return [{ weight: "", reps: "" }]; }
 
+function defaultSelectionsFromMigration() {
+  const selections = {};
+  Object.keys(SLOT_TEMPLATES).forEach(dayId => {
+    SLOT_TEMPLATES[dayId].forEach(slot => {
+      if (slot.fixed) { selections[slot.id] = slot.options[0]; return; }
+      const candidates = Object.keys(MIGRATION_MAP)
+        .filter(oldId => slot.options.includes(MIGRATION_MAP[oldId]))
+        .map(oldId => ({ newId: MIGRATION_MAP[oldId], count: loadJSON(keyFor(oldId), []).length }));
+      if (candidates.length) {
+        candidates.sort((a, b) => b.count - a.count);
+        selections[slot.id] = candidates[0].newId;
+      } else {
+        selections[slot.id] = slot.options[0];
+      }
+    });
+  });
+  return selections;
+}
+
+function runMigrationIfNeeded() {
+  const migrated = loadJSON(keyFor("migratedV2"), false);
+  if (migrated) return;
+
+  Object.keys(MIGRATION_MAP).forEach(oldId => {
+    const newId = MIGRATION_MAP[oldId];
+    const oldData = loadJSON(keyFor(oldId), []);
+    if (oldData.length) {
+      const existing = loadJSON(keyFor(newId), []);
+      const merged = [...existing, ...oldData].sort((a, b) => new Date(a.date) - new Date(b.date));
+      saveJSON(keyFor(newId), merged);
+    }
+  });
+
+  saveJSON(keyFor("blockState"), {
+    blockStartDate: new Date().toISOString(),
+    selections: defaultSelectionsFromMigration(),
+  });
+  saveJSON(keyFor("migratedV2"), true);
+}
+
+function loadBlockState() {
+  const state = loadJSON(keyFor("blockState"), null);
+  if (state) return state;
+  const fresh = { blockStartDate: new Date().toISOString(), selections: defaultSelectionsFromMigration() };
+  saveJSON(keyFor("blockState"), fresh);
+  return fresh;
+}
+
+function activeWeeksSince(startDate, workoutSessions) {
+  const startWeek = dateStr(startOfWeek(new Date(startDate)));
+  const weeks = new Set();
+  workoutSessions.forEach(s => {
+    if (weekKey(s.date) >= startWeek) weeks.add(weekKey(s.date));
+  });
+  return weeks.size;
+}
+
+function rollBlockIfDue(blockState, workoutSessions) {
+  const weeksIn = activeWeeksSince(blockState.blockStartDate, workoutSessions);
+  if (weeksIn < ROTATION_BLOCK_WEEKS) return null;
+
+  const newSelections = { ...blockState.selections };
+  Object.keys(SLOT_TEMPLATES).forEach(dayId => {
+    SLOT_TEMPLATES[dayId].forEach(slot => {
+      if (slot.fixed || slot.options.length < 2) return;
+      const current = blockState.selections[slot.id];
+      const choices = slot.options.filter(o => o !== current);
+      newSelections[slot.id] = choices.length ? choices[Math.floor(Math.random() * choices.length)] : current;
+    });
+  });
+  return { blockStartDate: new Date().toISOString(), selections: newSelections };
+}
+
+function getDayExercises(dayId, selections) {
+  return SLOT_TEMPLATES[dayId].map(slot => {
+    const exId = (selections && selections[slot.id]) || slot.options[0];
+    return { id: exId, name: EX[exId].name, target: slot.target, slotId: slot.id };
+  });
+}
+
 function App() {
   const [view, setView] = useState("dashboard");
-  const [activeDay, setActiveDay] = useState(PLAN[0].id);
+  const [activeDay, setActiveDay] = useState(PLAN_META[0].id);
   const [history, setHistory] = useState({});
   const [workoutSessions, setWorkoutSessions] = useState([]);
+  const [blockState, setBlockState] = useState(null);
   const [drafts, setDrafts] = useState(() => {
     const d = {};
-    PLAN.forEach(day => day.exercises.forEach(ex => { d[ex.id] = blankRows(); }));
+    Object.keys(EX).forEach(id => { d[id] = blankRows(); });
     return d;
   });
   const [equipmentSel, setEquipmentSel] = useState(() => {
     const e = {};
-    PLAN.forEach(day => day.exercises.forEach(ex => { e[ex.id] = EQUIPMENT_DEFAULT[ex.id] || "dumbbell"; }));
+    Object.keys(EX).forEach(id => { e[id] = EX[id].eq || "dumbbell"; });
     return e;
   });
   const [justLoggedIds, setJustLoggedIds] = useState(new Set());
   const [banner, setBanner] = useState("");
 
   const reloadAll = useCallback(() => {
-    const ids = PLAN.flatMap(d => d.exercises.map(e => e.id));
+    runMigrationIfNeeded();
+    const ids = Object.keys(EX);
     const all = {};
     ids.forEach(id => { all[id] = loadJSON(keyFor(id), []); });
     setHistory(all);
-    setWorkoutSessions(loadJSON(keyFor("workoutSessions"), []));
+    const sessions = loadJSON(keyFor("workoutSessions"), []);
+    setWorkoutSessions(sessions);
+
+    let bs = loadBlockState();
+    const rolled = rollBlockIfDue(bs, sessions);
+    if (rolled) {
+      saveJSON(keyFor("blockState"), rolled);
+      bs = rolled;
+    }
+    setBlockState(bs);
   }, []);
 
   useEffect(() => { reloadAll(); }, [reloadAll]);
@@ -957,9 +1124,9 @@ function App() {
     const sessions = loadJSON(keyFor("workoutSessions"), []);
     if (!sessions.length) return;
     const lastDayId = sessions[sessions.length - 1].dayId;
-    const idx = PLAN.findIndex(d => d.id === lastDayId);
+    const idx = PLAN_META.findIndex(d => d.id === lastDayId);
     if (idx === -1) return;
-    const nextDay = PLAN[(idx + 1) % PLAN.length];
+    const nextDay = PLAN_META[(idx + 1) % PLAN_META.length];
     setActiveDay(nextDay.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1002,11 +1169,12 @@ function App() {
   };
 
   const handleLogDay = () => {
-    const day = PLAN.find(d => d.id === activeDay);
+    const dayMeta = PLAN_META.find(d => d.id === activeDay);
+    const dayExercises = getDayExercises(activeDay, blockState.selections);
     const today = dateStr(new Date());
     const alreadyLoggedToday = workoutSessions.some(s => s.dayId === activeDay && dateStr(s.date) === today);
     if (alreadyLoggedToday) {
-      const proceed = window.confirm(`You already logged ${day.label} today. Log it again?`);
+      const proceed = window.confirm(`You already logged ${dayMeta.label} today. Log it again?`);
       if (!proceed) return;
     }
 
@@ -1014,7 +1182,7 @@ function App() {
     const newHistory = { ...history };
     const loggedIds = [];
 
-    day.exercises.forEach(ex => {
+    dayExercises.forEach(ex => {
       const rows = drafts[ex.id] || [];
       const clean = rows
         .filter(r => r.weight !== "" && r.reps !== "" && !isNaN(Number(r.weight)) && !isNaN(Number(r.reps)))
@@ -1035,14 +1203,14 @@ function App() {
 
     setHistory(newHistory);
 
-    const newSessions = [...workoutSessions, { date: now, dayId: day.id }];
+    const newSessions = [...workoutSessions, { date: now, dayId: dayMeta.id }];
     setWorkoutSessions(newSessions);
     saveJSON(keyFor("workoutSessions"), newSessions);
 
     // reset drafts for this day only
     setDrafts(d => {
       const nd = { ...d };
-      day.exercises.forEach(ex => { nd[ex.id] = blankRows(); });
+      dayExercises.forEach(ex => { nd[ex.id] = blankRows(); });
       return nd;
     });
 
@@ -1053,15 +1221,25 @@ function App() {
     const lastBackupAt = loadJSON(keyFor("lastBackupAt"), null);
     const daysSinceBackup = lastBackupAt ? (Date.now() - new Date(lastBackupAt).getTime()) / 86400000 : Infinity;
 
-    let msg = `Logged ${loggedIds.length} of ${day.exercises.length} exercises for ${day.label}.`;
+    let msg = `Logged ${loggedIds.length} of ${dayExercises.length} exercises for ${dayMeta.label}.`;
     if (sinceBackup >= 4 || daysSinceBackup >= 7) {
       msg += " Consider backing up your data — see the Backup tab.";
     }
+
+    // check whether this session completes the current rotation block
+    const rolled = rollBlockIfDue(blockState, newSessions);
+    if (rolled) {
+      saveJSON(keyFor("blockState"), rolled);
+      setBlockState(rolled);
+      msg += " Your 6-week block is complete — a few exercises just rotated for next time.";
+    }
+
     setBanner(msg);
-    setTimeout(() => { setJustLoggedIds(new Set()); setBanner(""); }, 4000);
+    setTimeout(() => { setJustLoggedIds(new Set()); setBanner(""); }, 5000);
   };
 
-  const day = PLAN.find(d => d.id === activeDay);
+  const dayMeta = PLAN_META.find(d => d.id === activeDay);
+  const dayExercises = blockState ? getDayExercises(activeDay, blockState.selections) : [];
 
   return (
     <div style={{ minHeight:"100vh", width:"100%", background:"#121210", color:"#ece8de" }}>
@@ -1069,8 +1247,8 @@ function App() {
         <div style={{ marginBottom:20 }}>
           <div style={{ display:"inline-block", borderBottom:"3px solid #cc7a3c", paddingBottom:6 }}>
             <div className="display" style={{ fontSize:36, lineHeight:0.95, letterSpacing:0.5 }}>
-              <span style={{ color:"#ece8de" }}>LOAD </span>
-              <span style={{ color:"#cc7a3c" }}>LOG</span>
+              <span className="display" style={{ color:"#ece8de" }}>LOAD </span>
+              <span className="display" style={{ color:"#cc7a3c" }}>LOG</span>
             </div>
           </div>
           <div style={{ fontSize:12, marginTop:8, color:"#8b877c" }}>4-day split · progressive overload tracker</div>
@@ -1098,10 +1276,10 @@ function App() {
           }}>Backup</button>
         </div>
 
-        {view === "log" && (
+        {view === "log" && blockState && (
           <div className="fade-in">
             <div style={{ display:"flex", gap:8, marginBottom:20, overflowX:"auto", paddingBottom:4 }}>
-              {PLAN.map(d => {
+              {PLAN_META.map(d => {
                 const active = d.id === activeDay;
                 return (
                   <button key={d.id} onClick={() => setActiveDay(d.id)} style={{
@@ -1116,7 +1294,8 @@ function App() {
             </div>
 
             <DayView
-              day={day}
+              dayMeta={dayMeta}
+              exercises={dayExercises}
               history={history}
               drafts={drafts}
               equipmentSel={equipmentSel}
@@ -1131,6 +1310,8 @@ function App() {
               onAutofill={handleAutofill}
               onEditSession={handleEditSession}
               onDeleteSession={handleDeleteSession}
+              blockState={blockState}
+              workoutSessions={workoutSessions}
             />
           </div>
         )}
