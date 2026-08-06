@@ -138,7 +138,7 @@ const SLOT_TEMPLATES = {
     { id:"b-vertical-pull", fixed:false, target:"3 x 8-10",  options:["lat-pulldown","pull-ups","chin-ups"] },
     { id:"b-horizontal-pull",fixed:false,target:"3 x 8-10 ea",options:["single-arm-cable-row","landmine-row"] },
     { id:"b-back-iso",      fixed:false, target:"3 x 12-15", options:["face-pulls-back","straight-arm-pulldown","db-shrug"] },
-    { id:"b-curl-a",        fixed:false, target:"3 x 8-10",  options:["db-curl","cable-curl"] },
+    { id:"b-curl-a",        fixed:true,  target:"3 x 8-10",  options:["db-curl"] },
     { id:"b-curl-b",        fixed:false, target:"2 x 10-12", options:["hammer-curl","incline-db-curl"] },
   ],
   d3: [
@@ -224,7 +224,35 @@ function PlateRow({ plates, empty }) {
   );
 }
 
-function EquipmentVisual({ equipment, weight }) {
+function MirroredPlates({ plates, empty }) {
+  if (empty) return <span style={{fontSize:12, color:"#6b675e"}}>{empty}</span>;
+  const reversed = [...plates].reverse();
+  return (
+    <div style={{ display:"flex", alignItems:"center" }}>
+      {reversed.map((p,i) => (
+        <div key={`l${i}`} style={{
+          width: PLATE_SIZE[p], height: PLATE_SIZE[p], marginLeft: i===0?0:-5,
+          borderRadius: "50%", background: "#161613", border: "2px solid #3a3d38",
+          boxShadow: "inset 0 0 0 3px #0d0d0b", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0
+        }}>
+          <span className="display" style={{ fontSize: PLATE_SIZE[p] > 36 ? 12 : 9, color:"#e8e6df" }}>{p}</span>
+        </div>
+      ))}
+      <div style={{ height:8, width:26, background:"#4a4d46", flexShrink:0, marginLeft: reversed.length ? -2 : 0, marginRight: plates.length ? -2 : 0 }} />
+      {plates.map((p,i) => (
+        <div key={`r${i}`} style={{
+          width: PLATE_SIZE[p], height: PLATE_SIZE[p], marginLeft: i===0?0:-5,
+          borderRadius: "50%", background: "#161613", border: "2px solid #3a3d38",
+          boxShadow: "inset 0 0 0 3px #0d0d0b", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0
+        }}>
+          <span className="display" style={{ fontSize: PLATE_SIZE[p] > 36 ? 12 : 9, color:"#e8e6df" }}>{p}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EquipmentVisual({ equipment, weight, cableMode }) {
   if (equipment === "bodyweight") {
     const w = Number(weight) || 0;
     return (
@@ -252,6 +280,17 @@ function EquipmentVisual({ equipment, weight }) {
     return <div style={{fontSize:12, color:"#8b877c"}}>Band — track by color / tension, not plate weight</div>;
   }
   if (equipment === "cable") {
+    if (cableMode === "dual") {
+      const plates = cablePlates(weight);
+      return (
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+          <PlateRow plates={plates} empty={plates.length===0 ? "pin only" : null} />
+          <span style={{ fontSize:10, color:"#6b675e" }}>+</span>
+          <PlateRow plates={plates} empty={plates.length===0 ? "pin only" : null} />
+          <span style={{ fontSize:12, color:"#6b675e" }}>{weight} lb per side · {weight * 2} lb combined</span>
+        </div>
+      );
+    }
     const plates = cablePlates(weight);
     return (
       <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
@@ -260,13 +299,12 @@ function EquipmentVisual({ equipment, weight }) {
       </div>
     );
   }
-  // smith
+  // smith — plates mirrored on both sides of the bar
   const plates = smithPlates(weight);
   return (
     <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-      <div style={{ height:6, width:16, borderRadius:2, background:"#4a4d46", flexShrink:0 }} />
-      <PlateRow plates={plates} empty={plates.length===0 ? "bar only (45)" : null} />
-      <span style={{ fontSize:12, color:"#6b675e" }}>per side, {weight} lb total</span>
+      <MirroredPlates plates={plates} empty={plates.length===0 ? "bar only (45)" : null} />
+      <span style={{ fontSize:12, color:"#6b675e" }}>{weight} lb total</span>
     </div>
   );
 }
@@ -429,7 +467,7 @@ function SessionHistory({ sessions, onEdit, onDelete }) {
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <span style={{ fontSize:11, color:"#6b675e" }}>
               {new Date(s.date).toLocaleDateString(undefined, { month:"short", day:"numeric", year:"numeric" })}
-              {s.equipment ? ` · ${s.equipment}` : ""}
+              {s.equipment ? ` · ${s.equipment}${s.equipment === "cable" && s.cableMode ? ` (${s.cableMode})` : ""}` : ""}
             </span>
             {editingIdx !== s.idx && (
               <div style={{ display:"flex", gap:10 }}>
@@ -468,7 +506,7 @@ function SessionHistory({ sessions, onEdit, onDelete }) {
   );
 }
 
-function ExerciseRow({ exercise, history, equipment, onEquipmentChange, rows, onRowChange, onAddRow, onDuplicateLastSet, onRemoveRow, justLogged, onAutofill, onEditSession, onDeleteSession }) {
+function ExerciseRow({ exercise, history, equipment, onEquipmentChange, cableMode, onCableModeChange, rows, onRowChange, onAddRow, onDuplicateLastSet, onRemoveRow, justLogged, onAutofill, onEditSession, onDeleteSession }) {
   const [open, setOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const weightRefs = React.useRef({});
@@ -530,6 +568,20 @@ function ExerciseRow({ exercise, history, equipment, onEquipmentChange, rows, on
             }}>
               {EQUIPMENT_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
             </select>
+            {equipment === "cable" && (
+              <div style={{ display:"flex", borderRadius:4, overflow:"hidden", border:"1px solid #3a3d38" }}>
+                <button onClick={() => onCableModeChange("single")} style={{
+                  fontSize:12, padding:"5px 10px", border:"none", cursor:"pointer",
+                  background: cableMode !== "dual" ? "#cc7a3c" : "#121210",
+                  color: cableMode !== "dual" ? "#161613" : "#8b877c"
+                }}>Single</button>
+                <button onClick={() => onCableModeChange("dual")} style={{
+                  fontSize:12, padding:"5px 10px", border:"none", cursor:"pointer",
+                  background: cableMode === "dual" ? "#cc7a3c" : "#121210",
+                  color: cableMode === "dual" ? "#161613" : "#8b877c"
+                }}>Dual</button>
+              </div>
+            )}
             {untouched && last && (
               <button onClick={() => onAutofill(last.sets)} style={{
                 fontSize:12, padding:"5px 8px", borderRadius:4, background:"#121210",
@@ -545,7 +597,7 @@ function ExerciseRow({ exercise, history, equipment, onEquipmentChange, rows, on
           )}
 
           <div style={{ marginTop:10 }}>
-            <EquipmentVisual equipment={equipment} weight={draftTop || 0} />
+            <EquipmentVisual equipment={equipment} weight={draftTop || 0} cableMode={cableMode} />
           </div>
 
           {chartData.length > 1 && <div style={{ marginTop:12 }}><MiniLine data={chartData} /></div>}
@@ -623,8 +675,9 @@ function ExerciseRow({ exercise, history, equipment, onEquipmentChange, rows, on
   );
 }
 
-function DayView({ dayMeta, exercises, history, drafts, equipmentSel, onRowChange, onAddRow, onDuplicateLastSet, onRemoveRow, onEquipmentChange, onLogDay, justLoggedIds, banner, onAutofill, onEditSession, onDeleteSession, blockState, workoutSessions }) {
-  const weeksIn = Math.min(ROTATION_BLOCK_WEEKS, activeWeeksSince(blockState.blockStartDate, workoutSessions));
+function DayView({ dayMeta, exercises, history, drafts, equipmentSel, cableModeSel, onCableModeChange, onRowChange, onAddRow, onDuplicateLastSet, onRemoveRow, onEquipmentChange, onLogDay, justLoggedIds, banner, onAutofill, onEditSession, onDeleteSession, blockState, workoutSessions, onDismissChanges }) {
+  const weeksIn = Math.min(ROTATION_BLOCK_WEEKS, activeWeeksSinceForDay(dayMeta.id, blockState.blockStartDate, workoutSessions));
+  const showChanges = blockState.changes && blockState.changes.length > 0 && !blockState.changesDismissed;
 
   return (
     <div>
@@ -632,6 +685,23 @@ function DayView({ dayMeta, exercises, history, drafts, equipmentSel, onRowChang
         <div className="display" style={{ fontSize:22, color:"#ece8de" }}>{dayMeta.label}</div>
         <div style={{ fontSize:11, color:"#6b675e" }}>Block week {weeksIn} of {ROTATION_BLOCK_WEEKS}</div>
       </div>
+
+      {showChanges && (
+        <div className="fade-in" style={{
+          marginBottom:12, padding:"12px 14px", borderRadius:6,
+          background:"#1e1a12", border:"1px solid #3a2f1c"
+        }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
+            <span className="display" style={{ fontSize:14, color:"#cc7a3c" }}>New this block</span>
+            <button onClick={onDismissChanges} style={{ fontSize:11, color:"#8b877c", background:"none", border:"none", cursor:"pointer" }}>Got it</button>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+            {blockState.changes.map((c, i) => (
+              <div key={i} style={{ fontSize:12, color:"#ece8de" }}>{c.from} → {c.to}</div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {banner && (
         <div className="fade-in" style={{
@@ -648,6 +718,8 @@ function DayView({ dayMeta, exercises, history, drafts, equipmentSel, onRowChang
             history={history[ex.id]}
             equipment={equipmentSel[ex.id]}
             onEquipmentChange={v => onEquipmentChange(ex.id, v)}
+            cableMode={cableModeSel[ex.id]}
+            onCableModeChange={v => onCableModeChange(ex.id, v)}
             rows={drafts[ex.id]}
             onRowChange={(idx,f,v) => onRowChange(ex.id, idx, f, v)}
             onAddRow={() => onAddRow(ex.id)}
@@ -732,7 +804,10 @@ function Dashboard({ history, workoutSessions }) {
     });
   });
 
-  // muscle group frequency last 30 days + strength trend
+  // muscle group frequency last 30 days (based on all exercises for that
+  // muscle) + strength trend based ONLY on fixed anchor lifts, using
+  // estimated 1-rep-max (Epley) so reps-at-a-given-weight properly count
+  // as a strength gain, and rotating isolation exercises don't blur the line.
   const groupStats = MUSCLE_ORDER.map(group => {
     const exIds = Object.keys(EX).filter(id => EX[id].muscle === group);
     const allSessions = [];
@@ -742,19 +817,24 @@ function Dashboard({ history, workoutSessions }) {
       allSessions.filter(s => new Date(s.date) >= cutoff30).map(s => dateStr(s.date))
     );
 
-    const byWeek = {};
-    allSessions.forEach(s => {
-      const wk = weekKey(s.date);
-      if (!byWeek[wk]) byWeek[wk] = [];
-      byWeek[wk].push(topWeight(s));
+    const anchors = ANCHOR_LIFTS.filter(a => a.muscle === group).map(a => {
+      const sessions = history[a.exerciseId] || [];
+      const byWeek = {};
+      sessions.forEach(s => {
+        const best1RM = Math.max(...s.sets.map(set => epley1RM(set.weight, set.reps)));
+        const wk = weekKey(s.date);
+        if (!byWeek[wk]) byWeek[wk] = [];
+        byWeek[wk].push(best1RM);
+      });
+      const trend = Object.keys(byWeek).sort().map((wk, i) => ({
+        i: i + 1,
+        w: Math.round((byWeek[wk].reduce((a,b) => a+b, 0) / byWeek[wk].length)),
+      }));
+      const delta = trend.length >= 2 ? Math.round(trend[trend.length-1].w - trend[0].w) : null;
+      return { exerciseId: a.exerciseId, name: EX[a.exerciseId].name, trend, delta };
     });
-    const trend = Object.keys(byWeek).sort().map((wk,i) => ({
-      i: i+1,
-      w: Math.round((byWeek[wk].reduce((a,b)=>a+b,0) / byWeek[wk].length) * 10) / 10,
-    }));
-    const delta = trend.length >= 2 ? Math.round((trend[trend.length-1].w - trend[0].w)*10)/10 : null;
 
-    return { group, freq30: recentDates.size, trend, delta };
+    return { group, freq30: recentDates.size, anchors };
   });
 
   const maxFreq = Math.max(1, ...groupStats.map(g => g.freq30));
@@ -809,16 +889,24 @@ function Dashboard({ history, workoutSessions }) {
               <div style={{ width:`${(g.freq30/maxFreq)*100}%`, background:"#7a95a3", height:"100%" }} />
             </div>
             <div style={{ marginTop:10 }}>
-              {g.trend.length >= 2 ? (
-                <>
-                  <MiniLine data={g.trend} height={40} />
-                  <div style={{ fontSize:11, marginTop:2, color: g.delta >= 0 ? "#7a9d6f" : "#b06a5a" }}>
-                    {g.delta > 0 ? `+${g.delta} lb avg top set trend` : g.delta === 0 ? "holding steady" : `${g.delta} lb avg top set trend`}
-                  </div>
-                </>
-              ) : (
-                <div style={{ fontSize:11, color:"#6b675e" }}>Log a few more sessions to see a strength trend</div>
+              {g.anchors.length === 0 && (
+                <div style={{ fontSize:11, color:"#6b675e" }}>No fixed anchor lift for {g.group} — its exercises rotate each block.</div>
               )}
+              {g.anchors.map(a => (
+                <div key={a.exerciseId} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize:11, color:"#8b877c", marginBottom:2 }}>{a.name} · est. 1RM</div>
+                  {a.trend.length >= 2 ? (
+                    <>
+                      <MiniLine data={a.trend} height={40} />
+                      <div style={{ fontSize:11, marginTop:2, color: a.delta >= 0 ? "#7a9d6f" : "#b06a5a" }}>
+                        {a.delta > 0 ? `+${a.delta} lb est. 1RM trend` : a.delta === 0 ? "holding steady" : `${a.delta} lb est. 1RM trend`}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize:11, color:"#6b675e" }}>Log a few more sessions to see a strength trend</div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -832,11 +920,15 @@ function collectAllData() {
   const history = {};
   ids.forEach(id => { history[id] = loadJSON(keyFor(id), []); });
   const workoutSessions = loadJSON(keyFor("workoutSessions"), []);
+  const bodyweight = loadJSON(keyFor("bodyweight"), []);
+  const blockState = loadJSON(keyFor("blockState"), null);
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     history,
     workoutSessions,
+    bodyweight,
+    blockState,
   };
 }
 
@@ -863,7 +955,12 @@ function restoreBackup(data, onDone) {
       saveJSON(keyFor(id), data.history[id]);
     });
     saveJSON(keyFor("workoutSessions"), data.workoutSessions || []);
-    onDone(true, "Backup restored.");
+    if (data.bodyweight) saveJSON(keyFor("bodyweight"), data.bodyweight);
+    if (data.blockState) saveJSON(keyFor("blockState"), data.blockState);
+    const parts = ["workouts"];
+    if (data.bodyweight) parts.push("bodyweight log");
+    if (data.blockState) parts.push("rotation progress");
+    onDone(true, `Backup restored — ${parts.join(", ")}.`);
   } catch (e) {
     onDone(false, "Couldn't read that file.");
   }
@@ -999,25 +1096,106 @@ function BodyweightPanel() {
   );
 }
 
-function blankRows() { return [{ weight: "", reps: "" }]; }
-
-function defaultSelectionsFromMigration() {
-  const selections = {};
-  Object.keys(SLOT_TEMPLATES).forEach(dayId => {
-    SLOT_TEMPLATES[dayId].forEach(slot => {
-      if (slot.fixed) { selections[slot.id] = slot.options[0]; return; }
-      const candidates = Object.keys(MIGRATION_MAP)
-        .filter(oldId => slot.options.includes(MIGRATION_MAP[oldId]))
-        .map(oldId => ({ newId: MIGRATION_MAP[oldId], count: loadJSON(keyFor(oldId), []).length }));
-      if (candidates.length) {
-        candidates.sort((a, b) => b.count - a.count);
-        selections[slot.id] = candidates[0].newId;
-      } else {
-        selections[slot.id] = slot.options[0];
+function bestSetEver(sessions) {
+  let best = null;
+  (sessions || []).forEach(s => {
+    s.sets.forEach(set => {
+      const est = epley1RM(set.weight, set.reps);
+      if (!best || est > best.est1RM) {
+        best = { weight: set.weight, reps: set.reps, date: s.date, est1RM: est };
       }
     });
   });
+  return best;
+}
+
+function PRPanel({ history }) {
+  const now = Date.now();
+  const cutoffNew = now - 14 * 24 * 3600 * 1000;
+
+  const groups = MUSCLE_ORDER.map(muscle => {
+    const rows = Object.keys(EX)
+      .filter(id => EX[id].muscle === muscle)
+      .map(id => ({ id, name: EX[id].name, pr: bestSetEver(history[id]) }))
+      .filter(r => r.pr)
+      .sort((a, b) => b.pr.est1RM - a.pr.est1RM);
+    return { muscle, rows };
+  }).filter(g => g.rows.length > 0);
+
+  return (
+    <div className="fade-in">
+      <div className="display" style={{ fontSize:22, color:"#ece8de", marginBottom:14 }}>Personal Records</div>
+
+      {groups.length === 0 && (
+        <div style={{
+          background:"#1b1b17", border:"1px solid #2c2c26", borderRadius:6, padding:"20px 16px", textAlign:"center"
+        }}>
+          <div className="display" style={{ fontSize:18, color:"#ece8de", marginBottom:4 }}>No PRs yet</div>
+          <div style={{ fontSize:12, color:"#8b877c" }}>Log a few workouts and your best-ever lifts will show up here.</div>
+        </div>
+      )}
+
+      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        {groups.map(g => (
+          <div key={g.muscle}>
+            <div className="display" style={{ fontSize:16, color:"#8b877c", marginBottom:6 }}>{g.muscle}</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              {g.rows.map(r => {
+                const isNew = new Date(r.pr.date).getTime() >= cutoffNew;
+                return (
+                  <div key={r.id} style={{
+                    display:"flex", alignItems:"center", justifyContent:"space-between",
+                    background:"#1b1b17", border:"1px solid #2c2c26", borderRadius:6, padding:"10px 12px"
+                  }}>
+                    <div>
+                      <div style={{ fontSize:13, color:"#ece8de" }}>{r.name}</div>
+                      <div style={{ fontSize:11, color:"#6b675e", marginTop:1 }}>
+                        {new Date(r.pr.date).toLocaleDateString(undefined, { month:"short", day:"numeric", year:"numeric" })}
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      {isNew && (
+                        <span style={{ fontSize:10, padding:"2px 6px", borderRadius:4, background:"#2e2a1c", color:"#cc7a3c" }}>NEW</span>
+                      )}
+                      <span className="display" style={{ fontSize:17, color:"#cc7a3c" }}>{r.pr.weight}×{r.pr.reps}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function blankRows() { return [{ weight: "", reps: "" }]; }
+
+function defaultSelectionsForDay(dayId) {
+  const selections = {};
+  SLOT_TEMPLATES[dayId].forEach(slot => {
+    if (slot.fixed) { selections[slot.id] = slot.options[0]; return; }
+    const candidates = Object.keys(MIGRATION_MAP)
+      .filter(oldId => slot.options.includes(MIGRATION_MAP[oldId]))
+      .map(oldId => ({ newId: MIGRATION_MAP[oldId], count: loadJSON(keyFor(oldId), []).length }));
+    if (candidates.length) {
+      candidates.sort((a, b) => b.count - a.count);
+      selections[slot.id] = candidates[0].newId;
+    } else {
+      selections[slot.id] = slot.options[0];
+    }
+  });
   return selections;
+}
+
+function defaultBlockStateAllDays() {
+  const now = new Date().toISOString();
+  const state = {};
+  Object.keys(SLOT_TEMPLATES).forEach(dayId => {
+    state[dayId] = { blockStartDate: now, selections: defaultSelectionsForDay(dayId) };
+  });
+  return state;
 }
 
 function runMigrationIfNeeded() {
@@ -1034,44 +1212,47 @@ function runMigrationIfNeeded() {
     }
   });
 
-  saveJSON(keyFor("blockState"), {
-    blockStartDate: new Date().toISOString(),
-    selections: defaultSelectionsFromMigration(),
-  });
+  saveJSON(keyFor("blockState"), defaultBlockStateAllDays());
   saveJSON(keyFor("migratedV2"), true);
 }
 
+// per-day block state — each day tracks its own active weeks and rotates
+// independently, so a day you rarely log doesn't get dragged along by
+// progress on the days you do log consistently.
 function loadBlockState() {
   const state = loadJSON(keyFor("blockState"), null);
-  if (state) return state;
-  const fresh = { blockStartDate: new Date().toISOString(), selections: defaultSelectionsFromMigration() };
+  if (state && state.d1 && state.d1.blockStartDate) return state;
+  const fresh = defaultBlockStateAllDays();
   saveJSON(keyFor("blockState"), fresh);
   return fresh;
 }
 
-function activeWeeksSince(startDate, workoutSessions) {
+function activeWeeksSinceForDay(dayId, startDate, workoutSessions) {
   const startWeek = dateStr(startOfWeek(new Date(startDate)));
   const weeks = new Set();
   workoutSessions.forEach(s => {
-    if (weekKey(s.date) >= startWeek) weeks.add(weekKey(s.date));
+    if (s.dayId === dayId && weekKey(s.date) >= startWeek) weeks.add(weekKey(s.date));
   });
   return weeks.size;
 }
 
-function rollBlockIfDue(blockState, workoutSessions) {
-  const weeksIn = activeWeeksSince(blockState.blockStartDate, workoutSessions);
+function rollDayBlockIfDue(dayId, dayBlockState, workoutSessions) {
+  const weeksIn = activeWeeksSinceForDay(dayId, dayBlockState.blockStartDate, workoutSessions);
   if (weeksIn < ROTATION_BLOCK_WEEKS) return null;
 
-  const newSelections = { ...blockState.selections };
-  Object.keys(SLOT_TEMPLATES).forEach(dayId => {
-    SLOT_TEMPLATES[dayId].forEach(slot => {
-      if (slot.fixed || slot.options.length < 2) return;
-      const current = blockState.selections[slot.id];
-      const choices = slot.options.filter(o => o !== current);
-      newSelections[slot.id] = choices.length ? choices[Math.floor(Math.random() * choices.length)] : current;
-    });
+  const newSelections = { ...dayBlockState.selections };
+  const changes = [];
+  SLOT_TEMPLATES[dayId].forEach(slot => {
+    if (slot.fixed || slot.options.length < 2) return;
+    const current = dayBlockState.selections[slot.id];
+    const choices = slot.options.filter(o => o !== current);
+    const picked = choices.length ? choices[Math.floor(Math.random() * choices.length)] : current;
+    newSelections[slot.id] = picked;
+    if (picked !== current) {
+      changes.push({ slotId: slot.id, from: EX[current].name, to: EX[picked].name });
+    }
   });
-  return { blockStartDate: new Date().toISOString(), selections: newSelections };
+  return { blockStartDate: new Date().toISOString(), selections: newSelections, changes, changesDismissed: false };
 }
 
 function getDayExercises(dayId, selections) {
@@ -1079,6 +1260,24 @@ function getDayExercises(dayId, selections) {
     const exId = (selections && selections[slot.id]) || slot.options[0];
     return { id: exId, name: EX[exId].name, target: slot.target, slotId: slot.id };
   });
+}
+
+// fixed, never-rotating anchors — the lifts strength trends should actually
+// be based on, since they stay comparable block to block. Any fixed lift
+// with a real weight number qualifies, compound or isolation (a DB curl is
+// just as comparable over time as a bench press). Band work is excluded —
+// resistance-band "weight" isn't a meaningful, comparable number.
+const ANCHOR_LIFTS = [];
+Object.keys(SLOT_TEMPLATES).forEach(dayId => {
+  SLOT_TEMPLATES[dayId].forEach(slot => {
+    if (slot.fixed && EX[slot.options[0]].eq !== "band") {
+      ANCHOR_LIFTS.push({ exerciseId: slot.options[0], muscle: EX[slot.options[0]].muscle });
+    }
+  });
+});
+
+function epley1RM(weight, reps) {
+  return weight * (1 + reps / 30);
 }
 
 function App() {
@@ -1097,8 +1296,16 @@ function App() {
     Object.keys(EX).forEach(id => { e[id] = EX[id].eq || "dumbbell"; });
     return e;
   });
+  const [cableModeSel, setCableModeSel] = useState(() => {
+    const c = {};
+    const dualByDefault = new Set(["cable-fly-mid", "cable-fly-low-high", "cable-fly-high-low"]);
+    Object.keys(EX).forEach(id => { c[id] = dualByDefault.has(id) ? "dual" : "single"; });
+    return c;
+  });
   const [justLoggedIds, setJustLoggedIds] = useState(new Set());
   const [banner, setBanner] = useState("");
+
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const reloadAll = useCallback(() => {
     runMigrationIfNeeded();
@@ -1110,12 +1317,15 @@ function App() {
     setWorkoutSessions(sessions);
 
     let bs = loadBlockState();
-    const rolled = rollBlockIfDue(bs, sessions);
-    if (rolled) {
-      saveJSON(keyFor("blockState"), rolled);
-      bs = rolled;
-    }
-    setBlockState(bs);
+    let changed = false;
+    const nextBs = { ...bs };
+    Object.keys(SLOT_TEMPLATES).forEach(dayId => {
+      const rolled = rollDayBlockIfDue(dayId, bs[dayId], sessions);
+      if (rolled) { nextBs[dayId] = rolled; changed = true; }
+    });
+    if (changed) saveJSON(keyFor("blockState"), nextBs);
+    setBlockState(nextBs);
+    setRefreshKey(k => k + 1);
   }, []);
 
   useEffect(() => { reloadAll(); }, [reloadAll]);
@@ -1147,6 +1357,14 @@ function App() {
     ...d, [exId]: d[exId].length > 1 ? d[exId].filter((_,i) => i!==idx) : d[exId],
   }));
   const handleEquipmentChange = (exId, v) => setEquipmentSel(e => ({ ...e, [exId]: v }));
+  const handleCableModeChange = (exId, v) => setCableModeSel(c => ({ ...c, [exId]: v }));
+  const handleDismissChanges = () => {
+    setBlockState(bs => {
+      const updated = { ...bs, [activeDay]: { ...bs[activeDay], changesDismissed: true } };
+      saveJSON(keyFor("blockState"), updated);
+      return updated;
+    });
+  };
   const handleAutofill = (exId, sets) => setDrafts(d => ({
     ...d, [exId]: sets.map(s => ({ weight: String(s.weight), reps: String(s.reps) })),
   }));
@@ -1170,7 +1388,7 @@ function App() {
 
   const handleLogDay = () => {
     const dayMeta = PLAN_META.find(d => d.id === activeDay);
-    const dayExercises = getDayExercises(activeDay, blockState.selections);
+    const dayExercises = getDayExercises(activeDay, blockState[activeDay].selections);
     const today = dateStr(new Date());
     const alreadyLoggedToday = workoutSessions.some(s => s.dayId === activeDay && dateStr(s.date) === today);
     if (alreadyLoggedToday) {
@@ -1188,7 +1406,7 @@ function App() {
         .filter(r => r.weight !== "" && r.reps !== "" && !isNaN(Number(r.weight)) && !isNaN(Number(r.reps)))
         .map(r => ({ weight: Number(r.weight), reps: Number(r.reps) }));
       if (clean.length === 0) return; // skip blank exercise, no error
-      const session = { date: now, equipment: equipmentSel[ex.id], sets: clean };
+      const session = { date: now, equipment: equipmentSel[ex.id], cableMode: cableModeSel[ex.id], sets: clean };
       const updated = [...(newHistory[ex.id] || []), session];
       newHistory[ex.id] = updated;
       saveJSON(keyFor(ex.id), updated);
@@ -1226,12 +1444,13 @@ function App() {
       msg += " Consider backing up your data — see the Backup tab.";
     }
 
-    // check whether this session completes the current rotation block
-    const rolled = rollBlockIfDue(blockState, newSessions);
+    // check whether logging this session completes THIS DAY's rotation block
+    const rolled = rollDayBlockIfDue(activeDay, blockState[activeDay], newSessions);
     if (rolled) {
-      saveJSON(keyFor("blockState"), rolled);
-      setBlockState(rolled);
-      msg += " Your 6-week block is complete — a few exercises just rotated for next time.";
+      const newBlockState = { ...blockState, [activeDay]: rolled };
+      saveJSON(keyFor("blockState"), newBlockState);
+      setBlockState(newBlockState);
+      msg += ` ${dayMeta.label}'s 6-week block is complete — a few exercises just rotated for next time.`;
     }
 
     setBanner(msg);
@@ -1239,7 +1458,7 @@ function App() {
   };
 
   const dayMeta = PLAN_META.find(d => d.id === activeDay);
-  const dayExercises = blockState ? getDayExercises(activeDay, blockState.selections) : [];
+  const dayExercises = blockState ? getDayExercises(activeDay, blockState[activeDay].selections) : [];
 
   return (
     <div style={{ minHeight:"100vh", width:"100%", background:"#121210", color:"#ece8de" }}>
@@ -1269,6 +1488,11 @@ function App() {
             background: view==="weight" ? "#cc7a3c" : "#1b1b17", color: view==="weight" ? "#161613" : "#8b877c",
             border: `1px solid ${view==="weight" ? "#cc7a3c" : "#2c2c26"}`
           }}>Weight</button>
+          <button onClick={() => setView("prs")} style={{
+            fontSize:12, padding:"6px 10px", borderRadius:4, cursor:"pointer",
+            background: view==="prs" ? "#cc7a3c" : "#1b1b17", color: view==="prs" ? "#161613" : "#8b877c",
+            border: `1px solid ${view==="prs" ? "#cc7a3c" : "#2c2c26"}`
+          }}>PRs</button>
           <button onClick={() => setView("backup")} style={{
             fontSize:12, padding:"6px 10px", borderRadius:4, cursor:"pointer",
             background: view==="backup" ? "#cc7a3c" : "#1b1b17", color: view==="backup" ? "#161613" : "#8b877c",
@@ -1299,6 +1523,8 @@ function App() {
               history={history}
               drafts={drafts}
               equipmentSel={equipmentSel}
+              cableModeSel={cableModeSel}
+              onCableModeChange={handleCableModeChange}
               onRowChange={handleRowChange}
               onAddRow={handleAddRow}
               onDuplicateLastSet={handleDuplicateLastSet}
@@ -1310,14 +1536,16 @@ function App() {
               onAutofill={handleAutofill}
               onEditSession={handleEditSession}
               onDeleteSession={handleDeleteSession}
-              blockState={blockState}
+              blockState={blockState[activeDay]}
+              onDismissChanges={handleDismissChanges}
               workoutSessions={workoutSessions}
             />
           </div>
         )}
 
         {view === "dashboard" && <Dashboard history={history} workoutSessions={workoutSessions} />}
-        {view === "weight" && <BodyweightPanel />}
+        {view === "weight" && <BodyweightPanel key={refreshKey} />}
+        {view === "prs" && <PRPanel history={history} />}
         {view === "backup" && <BackupPanel onRestored={reloadAll} />}
       </div>
       <FloatingRestTimer liftedForButton={view === "log"} />
