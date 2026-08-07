@@ -340,17 +340,21 @@ function MiniLine({ data, height }) {
 }
 
 function MiniBars({ data, max }) {
-  const w = 260, h = 56, pad = 4, gap = 4;
+  const w = 260, h = 70, pad = 4, gap = 4;
+  const dateLabelH = 12, countLabelH = 10;
   const barW = (w - pad*2 - gap*(data.length-1)) / data.length;
   const scaleMax = max || Math.max(1, ...data.map(d => d.v));
+  const maxBarH = h - pad*2 - dateLabelH - countLabelH;
+  const barBottomY = h - pad - dateLabelH;
   return (
     <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
       {data.map((d,i) => {
-        const barH = Math.max(2, (d.v / scaleMax) * (h - pad*2 - 12));
+        const barH = Math.max(2, (d.v / scaleMax) * maxBarH);
         const x = pad + i*(barW+gap);
-        const y = h - pad - 12 - barH;
+        const y = barBottomY - barH;
         return (
           <g key={i}>
+            <text x={x + barW/2} y={y - 3} textAnchor="middle" fontSize="9" fill={d.v>0 ? "#7a95a3" : "#4a4a44"}>{d.v}</text>
             <rect x={x} y={y} width={barW} height={barH} fill={d.v>0 ? "#7a95a3" : "#2c2c26"} rx="2" />
             <text x={x + barW/2} y={h-2} textAnchor="middle" fontSize="8" fill="#6b675e">{d.label}</text>
           </g>
@@ -1055,6 +1059,11 @@ function BodyweightPanel() {
         <div style={{ flex:1, background:"#1b1b17", border:"1px solid #2c2c26", borderRadius:6, padding:"10px 12px" }}>
           <div className="display" style={{ fontSize:24, color:"#cc7a3c" }}>{current !== null ? `${current}` : "—"}</div>
           <div style={{ fontSize:11, color:"#8b877c" }}>current, lb</div>
+          {entries.length > 0 && (
+            <div style={{ fontSize:10, color:"#6b675e", marginTop:2 }}>
+              logged {new Date(entries[entries.length-1].date).toLocaleDateString(undefined, { month:"short", day:"numeric" })}
+            </div>
+          )}
         </div>
         <div style={{ flex:1, background:"#1b1b17", border:"1px solid #2c2c26", borderRadius:6, padding:"10px 12px" }}>
           <div className="display" style={{ fontSize:24, color: delta30 === null ? "#ece8de" : (delta30 >= 0 ? "#7a9d6f" : "#b06a5a") }}>
